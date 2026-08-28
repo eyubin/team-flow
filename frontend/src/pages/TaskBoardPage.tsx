@@ -56,6 +56,7 @@ export function TaskBoardPage() {
   const [commentBody, setCommentBody] = useState('')
   const [comments, setComments] = useState<Comment[]>([])
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([])
+  const [hasConflict, setHasConflict] = useState(false)
 
   const loadTasks = useCallback(async () => {
     if (!projectId) return
@@ -88,6 +89,7 @@ export function TaskBoardPage() {
 
   async function selectTask(task: Task) {
     setSelectedTask(task)
+    setHasConflict(false)
     setEditTitle(task.title)
     setEditStatus(task.status)
     setEditPriority(task.priority)
@@ -113,11 +115,37 @@ export function TaskBoardPage() {
       })) as Task
       setTasks((current) => current.map((task) => task.id === updated.id ? updated : task))
       setSelectedTask(updated)
+      setHasConflict(false)
       setMessage('Task updated')
     } catch (error) {
+      if (error instanceof ApiError && error.status === 409) setHasConflict(true)
       setMessage(error instanceof ApiError && error.status === 409
-        ? 'Conflict: this task changed elsewhere. Reload the task and try again.'
+        ? 'Conflict: this task changed elsewhere. Reload the task before saving again.'
         : error instanceof Error ? error.message : 'Unable to update task')
+    }
+  }
+
+  async function reloadSelectedTask() {
+    if (!selectedTask) return
+    try {
+      const fresh = (await request(`/api/tasks/${selectedTask.id}`)) as Task
+      setTasks((current) => current.map((task) => task.id === fresh.id ? fresh : task))
+      await selectTask(fresh)
+      setMessage('Task reloaded')
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Unable to reload task')
+    }
+  }
+
+  async function deleteSelectedTask() {
+    if (!selectedTask || !window.confirm(`Delete ${selectedTask.title}?`)) return
+    try {
+      await request(`/api/tasks/${selectedTask.id}`, { method: 'DELETE' })
+      setTasks((current) => current.filter((task) => task.id !== selectedTask.id))
+      setSelectedTask(null)
+      setMessage('Task deleted')
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Unable to delete task')
     }
   }
 
@@ -178,7 +206,9 @@ export function TaskBoardPage() {
             <label>Status<select value={editStatus} onChange={(event) => setEditStatus(event.target.value as Task['status'])}><option value="TODO">To do</option><option value="IN_PROGRESS">In progress</option><option value="DONE">Done</option></select></label>
             <label>Priority<select value={editPriority} onChange={(event) => setEditPriority(event.target.value as Task['priority'])}><option value="LOW">Low</option><option value="MEDIUM">Medium</option><option value="HIGH">High</option></select></label>
             <button type="submit">Save task</button>
+            <button type="button" className="danger-button" onClick={deleteSelectedTask}>Delete task</button>
           </form>
+          {hasConflict && <p className="conflict-state" role="alert">This task has changed on the server. <button type="button" className="link-button" onClick={reloadSelectedTask}>Reload task</button></p>}
           <h3>Comments</h3>
           <form onSubmit={addComment} className="inline-form"><label>Comment<input value={commentBody} onChange={(event) => setCommentBody(event.target.value)} required maxLength={4000} /></label><button type="submit">Add comment</button></form>
           {comments.length === 0 ? <p className="empty-state">No comments yet.</p> : <ul className="detail-list">{comments.map((comment) => <li key={comment.id}>{comment.body}</li>)}</ul>}
