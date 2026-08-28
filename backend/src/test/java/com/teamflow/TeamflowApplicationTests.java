@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
@@ -15,6 +16,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import java.util.List;
+import java.util.UUID;
 
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
@@ -76,4 +80,40 @@ class TeamflowApplicationTests {
             .andExpect(cookie().exists("access_token"))
             .andExpect(cookie().exists("refresh_token"));
       }
+
+                @Test
+                void authenticatedUserCanCreateAndFilterTasks() throws Exception {
+              UUID userId = UUID.randomUUID();
+              jdbcTemplate.update("""
+                INSERT INTO users (id, email, password_hash, display_name, enabled, created_at, updated_at)
+                VALUES (?, ?, ?, ?, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """, userId, userId + "@example.com", "test-hash", "Task Tester");
+              var auth = UsernamePasswordAuthenticationToken.authenticated(userId.toString(), null, List.of());
+
+              String workspace = mockMvc.perform(post("/api/workspaces")
+                  .with(authentication(auth)).with(csrf())
+                  .contentType("application/json").content("{\"name\":\"Task Workspace\"}"))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+              UUID workspaceId = UUID.fromString(workspace.replaceAll(".*\\\"id\\\":\\\"([^\\\"]+).*$", "$1"));
+
+              String project = mockMvc.perform(post("/api/workspaces/" + workspaceId + "/projects")
+                  .with(authentication(auth)).with(csrf())
+                  .contentType("application/json").content("{\"name\":\"Task Project\"}"))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+              UUID projectId = UUID.fromString(project.replaceAll(".*\\\"id\\\":\\\"([^\\\"]+).*$", "$1"));
+
+              mockMvc.perform(post("/api/projects/" + projectId + "/tasks")
+                  .with(authentication(auth)).with(csrf())
+                  .contentType("application/json")
+                  .content("{\"title\":\"Ship task API\",\"status\":\"IN_PROGRESS\",\"priority\":\"HIGH\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("IN_PROGRESS"))
+                .andExpect(jsonPath("$.version").value(0));
+
+              mockMvc.perform(get("/api/projects/" + projectId + "/tasks?status=IN_PROGRESS&size=10")
+                  .with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].title").value("Ship task API"));
+                }
 }

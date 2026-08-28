@@ -129,7 +129,7 @@ export function DashboardPage() {
             <h2 id="projects-heading">Projects</h2>
             {projects.length === 0 ? <p className="empty-state">No projects in this workspace yet.</p> : (
               <ul className="project-list">
-                {projects.map((project) => <li key={project.id}><strong>{project.name}</strong><span>{project.description ?? 'Ready for tasks'}</span></li>)}
+                {projects.map((project) => <li key={project.id}><strong>{project.name}</strong><span>{project.description ?? 'Ready for tasks'}</span><a href={`/projects/${project.id}/tasks`}>Open task board</a></li>)}
               </ul>
             )}
           </section>
