@@ -8,6 +8,9 @@ COPY . .
 RUN npm run build
 
 FROM nginxinc/nginx-unprivileged:1.28-alpine AS runtime
+USER root
+RUN apk upgrade --no-cache
+USER nginx
 COPY --chown=nginx:nginx nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build --chown=nginx:nginx /app/dist /usr/share/nginx/html
 EXPOSE 8080
