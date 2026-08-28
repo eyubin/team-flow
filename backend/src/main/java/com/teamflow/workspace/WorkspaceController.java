@@ -40,6 +40,37 @@ public class WorkspaceController {
         return service.getWorkspace(userId(authentication), workspaceId);
     }
 
+    @GetMapping("/workspaces/{workspaceId}/members")
+    public List<WorkspaceResponses.MemberResponse> listMembers(
+            Authentication authentication, @PathVariable UUID workspaceId) {
+        return service.listMembers(userId(authentication), workspaceId);
+    }
+
+    @PostMapping("/workspaces/{workspaceId}/members")
+    @ResponseStatus(HttpStatus.CREATED)
+    public WorkspaceResponses.MemberResponse addMember(
+            Authentication authentication,
+            @PathVariable UUID workspaceId,
+            @Valid @RequestBody MemberRequests.AddMember request) {
+        return service.addMember(userId(authentication), workspaceId, request);
+    }
+
+    @PatchMapping("/workspaces/{workspaceId}/members/{memberUserId}")
+    public WorkspaceResponses.MemberResponse updateMemberRole(
+            Authentication authentication,
+            @PathVariable UUID workspaceId,
+            @PathVariable UUID memberUserId,
+            @Valid @RequestBody MemberRequests.UpdateRole request) {
+        return service.updateMemberRole(userId(authentication), workspaceId, memberUserId, request);
+    }
+
+    @DeleteMapping("/workspaces/{workspaceId}/members/{memberUserId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void removeMember(
+            Authentication authentication, @PathVariable UUID workspaceId, @PathVariable UUID memberUserId) {
+        service.removeMember(userId(authentication), workspaceId, memberUserId);
+    }
+
     @GetMapping("/workspaces/{workspaceId}/projects")
     public List<WorkspaceResponses.ProjectResponse> listProjects(
             Authentication authentication, @PathVariable UUID workspaceId) {

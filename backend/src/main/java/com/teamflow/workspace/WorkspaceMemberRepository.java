@@ -8,4 +8,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface WorkspaceMemberRepository extends JpaRepository<WorkspaceMember, WorkspaceMemberId> {
     Optional<WorkspaceMember> findByIdWorkspaceIdAndIdUserId(UUID workspaceId, UUID userId);
     List<WorkspaceMember> findAllByIdUserId(UUID userId);
+    List<WorkspaceMember> findAllByIdWorkspaceId(UUID workspaceId);
+    long countByIdWorkspaceIdAndRole(UUID workspaceId, Role role);
 }

@@ -116,4 +116,39 @@ class TeamflowApplicationTests {
                 .andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.content[0].title").value("Ship task API"));
                 }
+
+                  @Test
+                  void adminCanManageMembersButCannotRemoveLastAdmin() throws Exception {
+                UUID adminId = UUID.randomUUID();
+                UUID memberId = UUID.randomUUID();
+                jdbcTemplate.update("""
+                  INSERT INTO users (id, email, password_hash, display_name, enabled, created_at, updated_at)
+                  VALUES (?, ?, ?, ?, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+                   (?, ?, ?, ?, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                  """, adminId, adminId + "@example.com", "test-hash", "Admin",
+                  memberId, memberId + "@example.com", "test-hash", "Member");
+                var auth = UsernamePasswordAuthenticationToken.authenticated(adminId.toString(), null, List.of());
+                String workspace = mockMvc.perform(post("/api/workspaces")
+                    .with(authentication(auth)).with(csrf())
+                    .contentType("application/json").content("{\"name\":\"Members Workspace\"}"))
+                  .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+                UUID workspaceId = UUID.fromString(workspace.replaceAll(".*\\\"id\\\":\\\"([^\\\"]+).*$", "$1"));
+
+                mockMvc.perform(post("/api/workspaces/" + workspaceId + "/members")
+                    .with(authentication(auth)).with(csrf())
+                    .contentType("application/json")
+                    .content("{\"email\":\"" + memberId + "@example.com\",\"role\":\"MEMBER\"}"))
+                  .andExpect(status().isCreated())
+                  .andExpect(jsonPath("$.role").value("MEMBER"));
+
+                mockMvc.perform(get("/api/workspaces/" + workspaceId + "/members").with(authentication(auth)))
+                  .andExpect(status().isOk())
+                  .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(2)));
+
+                mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch(
+                      "/api/workspaces/" + workspaceId + "/members/" + adminId)
+                    .with(authentication(auth)).with(csrf())
+                    .contentType("application/json").content("{\"role\":\"MEMBER\"}"))
+                  .andExpect(status().isConflict());
+                  }
 }

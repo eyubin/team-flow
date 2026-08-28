@@ -16,4 +16,6 @@ public final class WorkspaceResponses {
             return new ProjectResponse(project.getId(), project.getWorkspaceId(), project.getName(), project.getDescription());
         }
     }
+
+    public record MemberResponse(UUID userId, String email, String displayName, Role role) {}
 }

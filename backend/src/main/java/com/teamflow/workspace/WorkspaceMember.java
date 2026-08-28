@@ -31,4 +31,5 @@ public class WorkspaceMember {
 
     public WorkspaceMemberId getId() { return id; }
     public Role getRole() { return role; }
+    public void setRole(Role role) { this.role = role; }
 }
