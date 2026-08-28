@@ -151,4 +151,36 @@ class TeamflowApplicationTests {
                     .contentType("application/json").content("{\"role\":\"MEMBER\"}"))
                   .andExpect(status().isConflict());
                   }
+
+                    @Test
+                    void taskCommentsAndAuditHistoryAreAvailableToMembers() throws Exception {
+                  UUID userId = UUID.randomUUID();
+                  jdbcTemplate.update("""
+                    INSERT INTO users (id, email, password_hash, display_name, enabled, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    """, userId, userId + "@example.com", "test-hash", "Comment Tester");
+                  var auth = UsernamePasswordAuthenticationToken.authenticated(userId.toString(), null, List.of());
+                  String workspace = mockMvc.perform(post("/api/workspaces").with(authentication(auth)).with(csrf())
+                      .contentType("application/json").content("{\"name\":\"Comment Workspace\"}"))
+                    .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+                  UUID workspaceId = UUID.fromString(workspace.replaceAll(".*\\\"id\\\":\\\"([^\\\"]+).*$", "$1"));
+                  String project = mockMvc.perform(post("/api/workspaces/" + workspaceId + "/projects")
+                      .with(authentication(auth)).with(csrf()).contentType("application/json")
+                      .content("{\"name\":\"Comment Project\"}"))
+                    .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+                  UUID projectId = UUID.fromString(project.replaceAll(".*\\\"id\\\":\\\"([^\\\"]+).*$", "$1"));
+                  String task = mockMvc.perform(post("/api/projects/" + projectId + "/tasks")
+                      .with(authentication(auth)).with(csrf()).contentType("application/json")
+                      .content("{\"title\":\"Review comments\"}"))
+                    .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+                  UUID taskId = UUID.fromString(task.replaceAll(".*\\\"id\\\":\\\"([^\\\"]+).*$", "$1"));
+
+                  mockMvc.perform(post("/api/tasks/" + taskId + "/comments").with(authentication(auth)).with(csrf())
+                      .contentType("application/json").content("{\"body\":\"Looks good\"}"))
+                    .andExpect(status().isCreated()).andExpect(jsonPath("$.body").value("Looks good"));
+                  mockMvc.perform(get("/api/tasks/" + taskId + "/comments").with(authentication(auth)))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)));
+                  mockMvc.perform(get("/api/audit-events?entityType=TASK&entityId=" + taskId).with(authentication(auth)))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(2));
+                    }
 }

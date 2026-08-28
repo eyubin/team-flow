@@ -1,5 +1,6 @@
 package com.teamflow.task;
 
+import com.teamflow.audit.AuditService;
 import com.teamflow.workspace.Project;
 import com.teamflow.workspace.ProjectRepository;
 import com.teamflow.workspace.Role;
@@ -7,6 +8,7 @@ import com.teamflow.workspace.WorkspaceMember;
 import com.teamflow.workspace.WorkspaceMemberRepository;
 import java.time.LocalDate;
 import java.util.UUID;
+import java.util.Map;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -22,11 +24,13 @@ public class TaskService {
     private final TaskRepository tasks;
     private final ProjectRepository projects;
     private final WorkspaceMemberRepository members;
+    private final AuditService audit;
 
-    public TaskService(TaskRepository tasks, ProjectRepository projects, WorkspaceMemberRepository members) {
+    public TaskService(TaskRepository tasks, ProjectRepository projects, WorkspaceMemberRepository members, AuditService audit) {
         this.tasks = tasks;
         this.projects = projects;
         this.members = members;
+        this.audit = audit;
     }
 
     @Transactional
@@ -38,7 +42,9 @@ public class TaskService {
                 request.status() == null ? TaskStatus.TODO : request.status(),
                 request.priority() == null ? TaskPriority.MEDIUM : request.priority(),
                 request.assigneeId(), request.dueDate(), java.time.Instant.now());
-        return TaskResponses.TaskResponse.from(tasks.save(task));
+        Task saved = tasks.save(task);
+        audit.record(userId, "TASK_CREATED", "TASK", saved.getId(), Map.of("projectId", projectId.toString()));
+        return TaskResponses.TaskResponse.from(saved);
     }
 
     @Transactional(readOnly = true)
@@ -74,7 +80,9 @@ public class TaskService {
         }
         validateAssignee(userId, project, request.assigneeId());
         task.update(request.title(), request.description(), request.status(), request.priority(), request.assigneeId(), request.dueDate());
-        return TaskResponses.TaskResponse.from(tasks.saveAndFlush(task));
+        Task saved = tasks.saveAndFlush(task);
+        audit.record(userId, "TASK_UPDATED", "TASK", saved.getId(), Map.of("version", saved.getVersion()));
+        return TaskResponses.TaskResponse.from(saved);
     }
 
     @Transactional
@@ -82,6 +90,7 @@ public class TaskService {
         Task task = requireTask(taskId);
         requireWriteRole(userId, requireProject(task.getProjectId()));
         tasks.delete(task);
+        audit.record(userId, "TASK_DELETED", "TASK", taskId, Map.of("projectId", task.getProjectId().toString()));
     }
 
     private Project requireProject(UUID id) {
