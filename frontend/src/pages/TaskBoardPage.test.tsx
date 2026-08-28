@@ -59,4 +59,30 @@ describe('TaskBoardPage', () => {
 
     await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes('status=DONE'))).toBe(true))
   })
+
+  it('shows a forbidden page when the project cannot be accessed', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response({}, true, 204))
+      .mockResolvedValueOnce(response({ detail: 'Not a member of this project' }, false, 403))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderBoard()
+
+    expect(await screen.findByRole('heading', { name: /don't have permission to view this/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Create task' })).not.toBeInTheDocument()
+  })
+
+  it('shows a forbidden alert when a viewer tries to create a task', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response({}, true, 204))
+      .mockResolvedValueOnce(response({ content: [] }))
+      .mockResolvedValueOnce(response({}, false, 403))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderBoard()
+    fireEvent.change(await screen.findByLabelText('New task'), { target: { value: 'Ship the feature' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create task' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent("don't have permission")
+  })
 })

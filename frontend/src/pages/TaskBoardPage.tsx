@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import type { FormEvent } from 'react'
+import { ApiError, isForbidden, request } from '../lib/api.ts'
+import { Forbidden } from '../components/Forbidden.tsx'
 
 type Task = {
   id: string
@@ -15,33 +17,6 @@ type Task = {
 type Comment = { id: string; body: string; createdAt: string }
 type AuditEvent = { id: string; action: string; createdAt: string }
 
-class ApiError extends Error {
-  readonly status: number
-
-  constructor(status: number) {
-    super(`Request failed (${status})`)
-    this.status = status
-  }
-}
-
-function csrfToken() {
-  return document.cookie.split('; ').find((cookie) => cookie.startsWith('XSRF-TOKEN='))?.split('=')[1]
-}
-
-async function request(url: string, options: RequestInit = {}) {
-  const response = await fetch(url, {
-    ...options,
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options.method && options.method !== 'GET' ? { 'X-XSRF-TOKEN': csrfToken() ?? '' } : {}),
-      ...options.headers,
-    },
-  })
-  if (!response.ok) throw new ApiError(response.status)
-  return response.status === 204 ? null : response.json()
-}
-
 export function TaskBoardPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const [tasks, setTasks] = useState<Task[]>([])
@@ -52,7 +27,9 @@ export function TaskBoardPage() {
   const [filterPriority, setFilterPriority] = useState<Task['priority'] | ''>('')
   const [assigneeFilter, setAssigneeFilter] = useState('')
   const [loading, setLoading] = useState(true)
+  const [forbidden, setForbidden] = useState(false)
   const [message, setMessage] = useState('')
+  const [actionForbidden, setActionForbidden] = useState(false)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [editTitle, setEditTitle] = useState('')
   const [editStatus, setEditStatus] = useState<Task['status']>('TODO')
@@ -75,13 +52,17 @@ export function TaskBoardPage() {
   useEffect(() => {
     request('/api/auth/csrf')
       .then(() => loadTasks())
-      .catch((error: unknown) => setMessage(error instanceof Error ? error.message : 'Unable to load tasks'))
+      .catch((error: unknown) => {
+        if (isForbidden(error)) setForbidden(true)
+        else setMessage(error instanceof Error ? error.message : 'Unable to load tasks')
+      })
       .finally(() => setLoading(false))
   }, [loadTasks])
 
   async function createTask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!projectId) return
+    setActionForbidden(false)
     try {
       await request(`/api/projects/${projectId}/tasks`, {
         method: 'POST',
@@ -91,6 +72,7 @@ export function TaskBoardPage() {
       await loadTasks()
       setMessage('Task created')
     } catch (error) {
+      if (isForbidden(error)) setActionForbidden(true)
       setMessage(error instanceof Error ? error.message : 'Unable to create task')
     }
   }
@@ -98,6 +80,7 @@ export function TaskBoardPage() {
   async function selectTask(task: Task) {
     setSelectedTask(task)
     setHasConflict(false)
+    setActionForbidden(false)
     setEditTitle(task.title)
     setEditStatus(task.status)
     setEditPriority(task.priority)
@@ -116,6 +99,7 @@ export function TaskBoardPage() {
   async function updateTask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!selectedTask) return
+    setActionForbidden(false)
     try {
       const updated = (await request(`/api/tasks/${selectedTask.id}`, {
         method: 'PATCH',
@@ -127,6 +111,7 @@ export function TaskBoardPage() {
       setMessage('Task updated')
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) setHasConflict(true)
+      if (isForbidden(error)) setActionForbidden(true)
       setMessage(error instanceof ApiError && error.status === 409
         ? 'Conflict: this task changed elsewhere. Reload the task before saving again.'
         : error instanceof Error ? error.message : 'Unable to update task')
@@ -147,12 +132,14 @@ export function TaskBoardPage() {
 
   async function deleteSelectedTask() {
     if (!selectedTask || !window.confirm(`Delete ${selectedTask.title}?`)) return
+    setActionForbidden(false)
     try {
       await request(`/api/tasks/${selectedTask.id}`, { method: 'DELETE' })
       setTasks((current) => current.filter((task) => task.id !== selectedTask.id))
       setSelectedTask(null)
       setMessage('Task deleted')
     } catch (error) {
+      if (isForbidden(error)) setActionForbidden(true)
       setMessage(error instanceof Error ? error.message : 'Unable to delete task')
     }
   }
@@ -160,6 +147,7 @@ export function TaskBoardPage() {
   async function addComment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!selectedTask) return
+    setActionForbidden(false)
     try {
       const comment = (await request(`/api/tasks/${selectedTask.id}/comments`, {
         method: 'POST', body: JSON.stringify({ body: commentBody }),
@@ -168,11 +156,13 @@ export function TaskBoardPage() {
       setCommentBody('')
       setMessage('Comment added')
     } catch (error) {
+      if (isForbidden(error)) setActionForbidden(true)
       setMessage(error instanceof Error ? error.message : 'Unable to add comment')
     }
   }
 
   if (loading) return <main className="page"><p>Loading tasks...</p></main>
+  if (forbidden) return <Forbidden message="You don't have access to this project's task board." />
 
   return (
     <main className="page dashboard-page">
@@ -231,6 +221,7 @@ export function TaskBoardPage() {
           {auditEvents.length === 0 ? <p className="empty-state">No history yet.</p> : <ul className="detail-list">{auditEvents.map((event) => <li key={event.id}>{event.action}</li>)}</ul>}
         </section>
       )}
+      {actionForbidden && <p className="forbidden-state" role="alert">You don't have permission to do that. Your role in this project is read-only.</p>}
       <p aria-live="polite" className="form-message">{message}</p>
       <p><a href="/dashboard">Back to dashboard</a></p>
     </main>

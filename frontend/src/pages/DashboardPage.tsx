@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
+import { isForbidden, request } from '../lib/api.ts'
+import { Forbidden } from '../components/Forbidden.tsx'
 
 type Workspace = {
   id: string
@@ -21,27 +23,6 @@ type Member = {
   role: 'ADMIN' | 'MEMBER' | 'VIEWER'
 }
 
-function csrfToken() {
-  return document.cookie
-    .split('; ')
-    .find((cookie) => cookie.startsWith('XSRF-TOKEN='))
-    ?.split('=')[1]
-}
-
-async function request(url: string, options: RequestInit = {}) {
-  const response = await fetch(url, {
-    ...options,
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options.method && options.method !== 'GET' ? { 'X-XSRF-TOKEN': csrfToken() ?? '' } : {}),
-      ...options.headers,
-    },
-  })
-  if (!response.ok) throw new Error(`Request failed (${response.status})`)
-  return response.status === 204 ? null : response.json()
-}
-
 export function DashboardPage() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [projects, setProjects] = useState<Project[]>([])
@@ -50,7 +31,9 @@ export function DashboardPage() {
   const [projectName, setProjectName] = useState('')
   const [selectedWorkspace, setSelectedWorkspace] = useState('')
   const [loading, setLoading] = useState(true)
+  const [forbidden, setForbidden] = useState(false)
   const [message, setMessage] = useState('')
+  const [actionForbidden, setActionForbidden] = useState(false)
 
   async function loadWorkspaces() {
     const body = (await request('/api/workspaces')) as Workspace[]
@@ -69,18 +52,23 @@ export function DashboardPage() {
   useEffect(() => {
     request('/api/auth/csrf')
       .then(() => loadWorkspaces())
-      .catch((error: unknown) => setMessage(error instanceof Error ? error.message : 'Unable to load dashboard'))
+      .catch((error: unknown) => {
+        if (isForbidden(error)) setForbidden(true)
+        else setMessage(error instanceof Error ? error.message : 'Unable to load dashboard')
+      })
       .finally(() => setLoading(false))
   }, [])
 
   async function createWorkspace(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    setActionForbidden(false)
     try {
       await request('/api/workspaces', { method: 'POST', body: JSON.stringify({ name: workspaceName }) })
       setWorkspaceName('')
       await loadWorkspaces()
       setMessage('Workspace created')
     } catch (error) {
+      if (isForbidden(error)) setActionForbidden(true)
       setMessage(error instanceof Error ? error.message : 'Unable to create workspace')
     }
   }
@@ -88,6 +76,7 @@ export function DashboardPage() {
   async function createProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!selectedWorkspace) return
+    setActionForbidden(false)
     try {
       await request(`/api/workspaces/${selectedWorkspace}/projects`, {
         method: 'POST',
@@ -97,6 +86,7 @@ export function DashboardPage() {
       setProjects((await request(`/api/workspaces/${selectedWorkspace}/projects`)) as Project[])
       setMessage('Project created')
     } catch (error) {
+      if (isForbidden(error)) setActionForbidden(true)
       setMessage(error instanceof Error ? error.message : 'Unable to create project')
     }
   }
@@ -108,6 +98,7 @@ export function DashboardPage() {
   async function addMember(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!selectedWorkspace) return
+    setActionForbidden(false)
     const form = new FormData(event.currentTarget)
     try {
       await request(`/api/workspaces/${selectedWorkspace}/members`, {
@@ -118,12 +109,14 @@ export function DashboardPage() {
       await loadWorkspaceMembers(selectedWorkspace)
       setMessage('Member added')
     } catch (error) {
+      if (isForbidden(error)) setActionForbidden(true)
       setMessage(error instanceof Error ? error.message : 'Unable to add member')
     }
   }
 
   async function changeRole(member: Member, role: Member['role']) {
     if (!selectedWorkspace || role === member.role) return
+    setActionForbidden(false)
     try {
       await request(`/api/workspaces/${selectedWorkspace}/members/${member.userId}`, {
         method: 'PATCH', body: JSON.stringify({ role }),
@@ -131,22 +124,26 @@ export function DashboardPage() {
       await loadWorkspaceMembers(selectedWorkspace)
       setMessage('Member role updated')
     } catch (error) {
+      if (isForbidden(error)) setActionForbidden(true)
       setMessage(error instanceof Error ? error.message : 'Unable to update role')
     }
   }
 
   async function removeMember(member: Member) {
     if (!selectedWorkspace || !window.confirm(`Remove ${member.displayName}?`)) return
+    setActionForbidden(false)
     try {
       await request(`/api/workspaces/${selectedWorkspace}/members/${member.userId}`, { method: 'DELETE' })
       await loadWorkspaceMembers(selectedWorkspace)
       setMessage('Member removed')
     } catch (error) {
+      if (isForbidden(error)) setActionForbidden(true)
       setMessage(error instanceof Error ? error.message : 'Unable to remove member')
     }
   }
 
   if (loading) return <main className="page"><p aria-live="polite">Loading dashboard...</p></main>
+  if (forbidden) return <Forbidden message="You don't have access to this dashboard." />
 
   return (
     <main className="page dashboard-page">
@@ -200,6 +197,7 @@ export function DashboardPage() {
           </section>
         </>
       )}
+      {actionForbidden && <p className="forbidden-state" role="alert">You don't have permission to do that. This action requires a higher role in this workspace.</p>}
       <p aria-live="polite" className="form-message">{message}</p>
     </main>
   )
