@@ -41,6 +41,8 @@ public class AuditService {
         UUID workspaceId = switch (entityType) {
             case "TASK" -> projectWorkspace(tasks.findById(entityId).orElseThrow(() -> notFound("Task")));
             case "PROJECT" -> projects.findById(entityId).map(Project::getWorkspaceId).orElseThrow(() -> notFound("Project"));
+            case "WORKSPACE" -> entityId;
+            case "MEMBER" -> memberWorkspace(entityId);
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported entity type");
         };
         if (members.findByIdWorkspaceIdAndIdUserId(workspaceId, userId).isEmpty()) {
@@ -52,6 +54,15 @@ public class AuditService {
 
     private UUID projectWorkspace(Task task) {
         return projects.findById(task.getProjectId()).map(Project::getWorkspaceId).orElseThrow(() -> notFound("Project"));
+    }
+
+    private UUID memberWorkspace(UUID memberUserId) {
+        return events.findFirstByEntityTypeAndEntityIdOrderByCreatedAtAsc("MEMBER", memberUserId)
+                .map(AuditEvent::getPayload)
+                .map(payload -> payload.get("workspaceId"))
+                .map(Object::toString)
+                .map(UUID::fromString)
+                .orElseThrow(() -> notFound("Member history"));
     }
 
     private static ResponseStatusException notFound(String type) {

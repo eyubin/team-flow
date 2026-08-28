@@ -2,8 +2,10 @@ package com.teamflow.workspace;
 
 import com.teamflow.auth.User;
 import com.teamflow.auth.UserRepository;
+import com.teamflow.audit.AuditService;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.Locale;
 import org.springframework.http.HttpStatus;
@@ -17,16 +19,18 @@ public class WorkspaceService {
     private final WorkspaceMemberRepository members;
     private final ProjectRepository projects;
     private final UserRepository users;
+    private final AuditService audit;
 
     public WorkspaceService(
             WorkspaceRepository workspaces,
             WorkspaceMemberRepository members,
             ProjectRepository projects,
-            UserRepository users) {
+            UserRepository users, AuditService audit) {
         this.workspaces = workspaces;
         this.members = members;
         this.projects = projects;
         this.users = users;
+        this.audit = audit;
     }
 
     @Transactional
@@ -34,6 +38,7 @@ public class WorkspaceService {
         Instant now = Instant.now();
         Workspace workspace = workspaces.save(new Workspace(UUID.randomUUID(), request.name().trim(), userId, now));
         members.save(new WorkspaceMember(new WorkspaceMemberId(workspace.getId(), userId), Role.ADMIN, now));
+        audit.record(userId, "WORKSPACE_CREATED", "WORKSPACE", workspace.getId(), Map.of("name", workspace.getName()));
         return WorkspaceResponses.WorkspaceResponse.from(workspace, Role.ADMIN);
     }
 
@@ -58,6 +63,7 @@ public class WorkspaceService {
         requireMember(userId, workspaceId);
         Project project = projects.save(new Project(
                 UUID.randomUUID(), workspaceId, request.name().trim(), request.description(), Instant.now()));
+        audit.record(userId, "PROJECT_CREATED", "PROJECT", project.getId(), Map.of("workspaceId", workspaceId.toString()));
         return WorkspaceResponses.ProjectResponse.from(project);
     }
 
@@ -80,7 +86,9 @@ public class WorkspaceService {
         Project project = requireProject(projectId);
         requireRole(userId, project.getWorkspaceId(), Role.ADMIN);
         project.update(request.name(), request.description());
-        return WorkspaceResponses.ProjectResponse.from(projects.save(project));
+        Project saved = projects.save(project);
+        audit.record(userId, "PROJECT_UPDATED", "PROJECT", projectId, Map.of("workspaceId", project.getWorkspaceId().toString()));
+        return WorkspaceResponses.ProjectResponse.from(saved);
     }
 
     @Transactional
@@ -88,6 +96,7 @@ public class WorkspaceService {
         Project project = requireProject(projectId);
         requireRole(userId, project.getWorkspaceId(), Role.ADMIN);
         projects.delete(project);
+        audit.record(userId, "PROJECT_DELETED", "PROJECT", projectId, Map.of("workspaceId", project.getWorkspaceId().toString()));
     }
 
     @Transactional(readOnly = true)
@@ -112,6 +121,7 @@ public class WorkspaceService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "User is already a workspace member");
         }
         WorkspaceMember member = members.save(new WorkspaceMember(memberId, request.role(), Instant.now()));
+        audit.record(userId, "MEMBER_ADDED", "MEMBER", user.getId(), Map.of("workspaceId", workspaceId.toString(), "role", request.role().name()));
         return new WorkspaceResponses.MemberResponse(user.getId(), user.getEmail(), user.getDisplayName(), member.getRole());
     }
 
@@ -123,6 +133,7 @@ public class WorkspaceService {
         protectLastAdmin(member, request.role());
         member.setRole(request.role());
         User user = requireUser(memberUserId);
+        audit.record(userId, "MEMBER_ROLE_UPDATED", "MEMBER", memberUserId, Map.of("workspaceId", workspaceId.toString(), "role", request.role().name()));
         return new WorkspaceResponses.MemberResponse(user.getId(), user.getEmail(), user.getDisplayName(), member.getRole());
     }
 
@@ -132,6 +143,7 @@ public class WorkspaceService {
         WorkspaceMember member = requireMemberRecord(workspaceId, memberUserId);
         protectLastAdmin(member, null);
         members.delete(member);
+        audit.record(userId, "MEMBER_REMOVED", "MEMBER", memberUserId, Map.of("workspaceId", workspaceId.toString()));
     }
 
     private Workspace requireWorkspace(UUID workspaceId) {

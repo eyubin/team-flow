@@ -14,6 +14,13 @@ type Project = {
   description?: string
 }
 
+type Member = {
+  userId: string
+  email: string
+  displayName: string
+  role: 'ADMIN' | 'MEMBER' | 'VIEWER'
+}
+
 function csrfToken() {
   return document.cookie
     .split('; ')
@@ -38,6 +45,7 @@ async function request(url: string, options: RequestInit = {}) {
 export function DashboardPage() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [projects, setProjects] = useState<Project[]>([])
+  const [members, setMembers] = useState<Member[]>([])
   const [workspaceName, setWorkspaceName] = useState('')
   const [projectName, setProjectName] = useState('')
   const [selectedWorkspace, setSelectedWorkspace] = useState('')
@@ -51,8 +59,10 @@ export function DashboardPage() {
     if (workspace) {
       setSelectedWorkspace((current) => current || workspace.id)
       setProjects((await request(`/api/workspaces/${workspace.id}/projects`)) as Project[])
+      setMembers((await request(`/api/workspaces/${workspace.id}/members`)) as Member[])
     } else {
       setProjects([])
+      setMembers([])
     }
   }
 
@@ -91,6 +101,51 @@ export function DashboardPage() {
     }
   }
 
+  async function loadWorkspaceMembers(workspaceId: string) {
+    setMembers((await request(`/api/workspaces/${workspaceId}/members`)) as Member[])
+  }
+
+  async function addMember(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!selectedWorkspace) return
+    const form = new FormData(event.currentTarget)
+    try {
+      await request(`/api/workspaces/${selectedWorkspace}/members`, {
+        method: 'POST',
+        body: JSON.stringify({ email: form.get('email'), role: form.get('role') }),
+      })
+      event.currentTarget.reset()
+      await loadWorkspaceMembers(selectedWorkspace)
+      setMessage('Member added')
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Unable to add member')
+    }
+  }
+
+  async function changeRole(member: Member, role: Member['role']) {
+    if (!selectedWorkspace || role === member.role) return
+    try {
+      await request(`/api/workspaces/${selectedWorkspace}/members/${member.userId}`, {
+        method: 'PATCH', body: JSON.stringify({ role }),
+      })
+      await loadWorkspaceMembers(selectedWorkspace)
+      setMessage('Member role updated')
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Unable to update role')
+    }
+  }
+
+  async function removeMember(member: Member) {
+    if (!selectedWorkspace || !window.confirm(`Remove ${member.displayName}?`)) return
+    try {
+      await request(`/api/workspaces/${selectedWorkspace}/members/${member.userId}`, { method: 'DELETE' })
+      await loadWorkspaceMembers(selectedWorkspace)
+      setMessage('Member removed')
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Unable to remove member')
+    }
+  }
+
   if (loading) return <main className="page"><p aria-live="polite">Loading dashboard...</p></main>
 
   return (
@@ -114,6 +169,7 @@ export function DashboardPage() {
             <select value={selectedWorkspace} onChange={async (event) => {
               setSelectedWorkspace(event.target.value)
               setProjects((await request(`/api/workspaces/${event.target.value}/projects`)) as Project[])
+              await loadWorkspaceMembers(event.target.value)
             }}>
               {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name} ({workspace.myRole})</option>)}
             </select>
@@ -132,6 +188,15 @@ export function DashboardPage() {
                 {projects.map((project) => <li key={project.id}><strong>{project.name}</strong><span>{project.description ?? 'Ready for tasks'}</span><a href={`/projects/${project.id}/tasks`}>Open task board</a></li>)}
               </ul>
             )}
+          </section>
+          <section aria-labelledby="members-heading" className="members-section">
+            <h2 id="members-heading">Members</h2>
+            {members.length === 0 ? <p className="empty-state">No members found.</p> : (
+              <ul className="member-list">
+                {members.map((member) => <li key={member.userId}><span><strong>{member.displayName}</strong><small>{member.email}</small></span>{workspaces.find((workspace) => workspace.id === selectedWorkspace)?.myRole === 'ADMIN' ? <><select aria-label={`Role for ${member.displayName}`} value={member.role} onChange={(event) => changeRole(member, event.target.value as Member['role'])}><option value="ADMIN">Admin</option><option value="MEMBER">Member</option><option value="VIEWER">Viewer</option></select><button type="button" className="danger-button" onClick={() => removeMember(member)}>Remove</button></> : <span>{member.role}</span>}</li>)}
+              </ul>
+            )}
+            {workspaces.find((workspace) => workspace.id === selectedWorkspace)?.myRole === 'ADMIN' && <form onSubmit={addMember} className="inline-form"><label>Email<input name="email" type="email" required /></label><label>Role<select name="role" defaultValue="MEMBER"><option value="MEMBER">Member</option><option value="VIEWER">Viewer</option><option value="ADMIN">Admin</option></select></label><button type="submit">Add member</button></form>}
           </section>
         </>
       )}

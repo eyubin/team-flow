@@ -124,6 +124,15 @@ class TeamflowApplicationTests {
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
               UUID projectId = UUID.fromString(project.replaceAll(".*\\\"id\\\":\\\"([^\\\"]+).*$", "$1"));
 
+              mockMvc.perform(get("/api/audit-events?entityType=WORKSPACE&entityId=" + workspaceId)
+                      .with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1));
+              mockMvc.perform(get("/api/audit-events?entityType=PROJECT&entityId=" + projectId)
+                      .with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1));
+
               String task = mockMvc.perform(post("/api/projects/" + projectId + "/tasks")
                   .with(authentication(auth)).with(csrf())
                   .contentType("application/json")
