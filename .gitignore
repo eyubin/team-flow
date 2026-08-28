@@ -1,16 +1,29 @@
 .env
+.env.local
+.env.*.local
 .DS_Store
 *.log
+logs/
+
+# IDE
+.idea/
+*.iml
+.vscode/*
+!.vscode/settings.json
 
 # Java
 backend/target/
-backend/.idea/
-*.iml
+backend/build/
 
 # Node
-frontend/node_modules/
+node_modules/
 frontend/dist/
 frontend/*.tsbuildinfo
 frontend/coverage/
 frontend/playwright-report/
 frontend/test-results/
+
+# Infra
+infra/.terraform/
+infra/*.tfstate
+infra/*.tfstate.*
