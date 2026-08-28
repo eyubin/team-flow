@@ -8,6 +8,7 @@ export function StatusPage() {
         Local skeleton is up when the API health check below reports <strong>UP</strong>.
       </p>
       <HealthStatus />
+      <p><a href="/auth">Open account flow</a></p>
     </main>
   )
 }
