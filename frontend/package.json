@@ -9,6 +9,8 @@
     "lint": "oxlint",
     "typecheck": "tsc -b",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "e2e": "playwright test",
     "preview": "vite preview"
   },
   "dependencies": {
