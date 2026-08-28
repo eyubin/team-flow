@@ -79,8 +79,15 @@ public class TaskService {
         if (!task.getVersion().equals(request.version())) {
             throw new OptimisticLockException(taskId, task.getVersion());
         }
-        validateAssignee(userId, project, request.assigneeId());
-        task.update(request.title(), request.description(), request.status(), request.priority(), request.assigneeId(), request.dueDate());
+        UUID assigneeId = request.assigneeIdSet() ? request.assigneeId() : task.getAssigneeId();
+        validateAssignee(userId, project, assigneeId);
+        task.update(
+            request.titleSet() ? request.title() : task.getTitle(),
+            request.descriptionSet() ? request.description() : task.getDescription(),
+            request.statusSet() ? request.status() : task.getStatus(),
+            request.prioritySet() ? request.priority() : task.getPriority(),
+            assigneeId,
+            request.dueDateSet() ? request.dueDate() : task.getDueDate());
         Task saved = tasks.saveAndFlush(task);
         audit.record(userId, "TASK_UPDATED", "TASK", saved.getId(), Map.of("version", saved.getVersion()));
         return TaskResponses.TaskResponse.from(saved);

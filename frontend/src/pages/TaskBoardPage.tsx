@@ -8,6 +8,7 @@ type Task = {
   description?: string
   status: 'TODO' | 'IN_PROGRESS' | 'DONE'
   priority: 'LOW' | 'MEDIUM' | 'HIGH'
+  assigneeId?: string
   version: number
 }
 
@@ -47,6 +48,9 @@ export function TaskBoardPage() {
   const [title, setTitle] = useState('')
   const [status, setStatus] = useState<Task['status']>('TODO')
   const [priority, setPriority] = useState<Task['priority']>('MEDIUM')
+  const [filterStatus, setFilterStatus] = useState<Task['status'] | ''>('')
+  const [filterPriority, setFilterPriority] = useState<Task['priority'] | ''>('')
+  const [assigneeFilter, setAssigneeFilter] = useState('')
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
@@ -60,9 +64,13 @@ export function TaskBoardPage() {
 
   const loadTasks = useCallback(async () => {
     if (!projectId) return
-    const body = (await request(`/api/projects/${projectId}/tasks?size=100&sort=createdAt,desc`)) as { content: Task[] }
+    const query = new URLSearchParams({ size: '100', sort: 'createdAt,desc' })
+    if (filterStatus) query.set('status', filterStatus)
+    if (filterPriority) query.set('priority', filterPriority)
+    if (assigneeFilter.trim()) query.set('assigneeId', assigneeFilter.trim())
+    const body = (await request(`/api/projects/${projectId}/tasks?${query}`)) as { content: Task[] }
     setTasks(body.content)
-  }, [projectId])
+  }, [assigneeFilter, filterPriority, filterStatus, projectId])
 
   useEffect(() => {
     request('/api/auth/csrf')
@@ -192,6 +200,13 @@ export function TaskBoardPage() {
           </select>
         </label>
         <button type="submit">Create task</button>
+      </form>
+      <form className="filter-form" onSubmit={(event) => { event.preventDefault(); void loadTasks() }}>
+        <label>Filter status<select value={filterStatus} onChange={(event) => setFilterStatus(event.target.value as Task['status'] | '')}><option value="">All statuses</option><option value="TODO">To do</option><option value="IN_PROGRESS">In progress</option><option value="DONE">Done</option></select></label>
+        <label>Filter priority<select value={filterPriority} onChange={(event) => setFilterPriority(event.target.value as Task['priority'] | '')}><option value="">All priorities</option><option value="LOW">Low</option><option value="MEDIUM">Medium</option><option value="HIGH">High</option></select></label>
+        <label>Assignee ID<input value={assigneeFilter} onChange={(event) => setAssigneeFilter(event.target.value)} placeholder="Optional UUID" /></label>
+        <button type="submit">Apply filters</button>
+        <button type="button" className="link-button" onClick={() => { setFilterStatus(''); setFilterPriority(''); setAssigneeFilter(''); }}>Clear</button>
       </form>
       {tasks.length === 0 ? <p className="empty-state">No tasks in this project yet.</p> : (
         <ul className="project-list">

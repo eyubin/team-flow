@@ -136,7 +136,7 @@ class TeamflowApplicationTests {
               String task = mockMvc.perform(post("/api/projects/" + projectId + "/tasks")
                   .with(authentication(auth)).with(csrf())
                   .contentType("application/json")
-                  .content("{\"title\":\"Ship task API\",\"status\":\"IN_PROGRESS\",\"priority\":\"HIGH\"}"))
+                  .content("{\"title\":\"Ship task API\",\"status\":\"IN_PROGRESS\",\"priority\":\"HIGH\",\"assigneeId\":\"" + userId + "\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("IN_PROGRESS"))
                 .andExpect(jsonPath("$.version").value(0))
@@ -153,10 +153,19 @@ class TeamflowApplicationTests {
                       "/api/tasks/" + taskId)
                     .with(authentication(auth)).with(csrf())
                     .contentType("application/json")
+                    .content("{\"version\":0,\"title\":\"Renamed task\"}"))
+                  .andExpect(status().isOk())
+                  .andExpect(jsonPath("$.title").value("Renamed task"))
+                  .andExpect(jsonPath("$.assigneeId").value(userId.toString()))
+                  .andExpect(jsonPath("$.version").value(1));
+                mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch(
+                      "/api/tasks/" + taskId)
+                    .with(authentication(auth)).with(csrf())
+                    .contentType("application/json")
                     .content("{\"version\":99,\"title\":\"Stale update\"}"))
                   .andExpect(status().isConflict())
                   .andExpect(jsonPath("$.type").value("urn:teamflow:problem:optimistic-lock"))
-                  .andExpect(jsonPath("$.currentVersion").value(0));
+                  .andExpect(jsonPath("$.currentVersion").value(1));
                 }
 
                   @Test
@@ -193,6 +202,45 @@ class TeamflowApplicationTests {
                     .contentType("application/json").content("{\"role\":\"MEMBER\"}"))
                   .andExpect(status().isConflict());
                   }
+
+                    @Test
+                    void viewerCanReadButCannotMutateTasks() throws Exception {
+                  UUID adminId = UUID.randomUUID();
+                  UUID viewerId = UUID.randomUUID();
+                  jdbcTemplate.update("""
+                    INSERT INTO users (id, email, password_hash, display_name, enabled, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+                           (?, ?, ?, ?, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    """, adminId, adminId + "@example.com", "test-hash", "Task Admin",
+                    viewerId, viewerId + "@example.com", "test-hash", "Task Viewer");
+                  var adminAuth = UsernamePasswordAuthenticationToken.authenticated(adminId.toString(), null, List.of());
+                  var viewerAuth = UsernamePasswordAuthenticationToken.authenticated(viewerId.toString(), null, List.of());
+                  String workspace = mockMvc.perform(post("/api/workspaces").with(authentication(adminAuth)).with(csrf())
+                      .contentType("application/json").content("{\"name\":\"Viewer Workspace\"}"))
+                    .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+                  UUID workspaceId = UUID.fromString(workspace.replaceAll(".*\\\"id\\\":\\\"([^\\\"]+).*$", "$1"));
+                  mockMvc.perform(post("/api/workspaces/" + workspaceId + "/members").with(authentication(adminAuth)).with(csrf())
+                      .contentType("application/json").content("{\"email\":\"" + viewerId + "@example.com\",\"role\":\"VIEWER\"}"))
+                    .andExpect(status().isCreated());
+                  String project = mockMvc.perform(post("/api/workspaces/" + workspaceId + "/projects").with(authentication(adminAuth)).with(csrf())
+                      .contentType("application/json").content("{\"name\":\"Viewer Project\"}"))
+                    .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+                  UUID projectId = UUID.fromString(project.replaceAll(".*\\\"id\\\":\\\"([^\\\"]+).*$", "$1"));
+                  String task = mockMvc.perform(post("/api/projects/" + projectId + "/tasks").with(authentication(adminAuth)).with(csrf())
+                      .contentType("application/json").content("{\"title\":\"Read me\"}"))
+                    .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+                  UUID taskId = UUID.fromString(task.replaceAll(".*\\\"id\\\":\\\"([^\\\"]+).*$", "$1"));
+
+                  mockMvc.perform(get("/api/tasks/" + taskId).with(authentication(viewerAuth)))
+                    .andExpect(status().isOk());
+                  mockMvc.perform(post("/api/projects/" + projectId + "/tasks").with(authentication(viewerAuth)).with(csrf())
+                      .contentType("application/json").content("{\"title\":\"Forbidden task\"}"))
+                    .andExpect(status().isForbidden());
+                  mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/tasks/" + taskId)
+                      .with(authentication(viewerAuth)).with(csrf()).contentType("application/json")
+                      .content("{\"version\":0,\"title\":\"Forbidden update\"}"))
+                    .andExpect(status().isForbidden());
+                    }
 
                     @Test
                     void taskCommentsAndAuditHistoryAreAvailableToMembers() throws Exception {
