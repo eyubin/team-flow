@@ -1,6 +1,6 @@
 # TeamFlow documentation (Stage 0)
 
-Design artifacts. Application code starts in Stage 1.
+Design artifacts for Stage 0. Stage 1 runnable skeleton: `make up` (see root README).
 
 | Document | Purpose |
 | -------- | ------- |

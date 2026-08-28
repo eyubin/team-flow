@@ -1,0 +1,54 @@
+:root {
+  color-scheme: light dark;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #14213d;
+  background: #f4f1ea;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.page {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 3rem 1.25rem;
+}
+
+.lede {
+  color: #3d4a5c;
+}
+
+.health {
+  border: 1px solid #c5cdd8;
+  border-radius: 0.5rem;
+  padding: 1rem 1.25rem;
+  background: #fff;
+}
+
+.health-ok {
+  border-color: #2a7a4b;
+}
+
+.health-error {
+  border-color: #b42318;
+}
+
+.health-loading {
+  border-style: dashed;
+}
+
+h1,
+h2 {
+  line-height: 1.2;
+}

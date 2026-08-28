@@ -1,0 +1,50 @@
+spring:
+  application:
+    name: teamflow
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/teamflow}
+    username: ${DATABASE_USERNAME:teamflow}
+    password: ${DATABASE_PASSWORD:teamflow}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+  mvc:
+    problemdetails:
+      enabled: true
+
+server:
+  port: ${SERVER_PORT:8080}
+  error:
+    include-stacktrace: never
+    include-message: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+
+teamflow:
+  cors:
+    origins: ${CORS_ORIGINS:http://localhost:5173,http://localhost:3000}
+  jwt:
+    access-secret: ${JWT_ACCESS_SECRET:}
+    refresh-secret: ${JWT_REFRESH_SECRET:}
+    access-ttl: 15m
+    refresh-ttl: 7d
