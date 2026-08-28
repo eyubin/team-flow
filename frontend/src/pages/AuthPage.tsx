@@ -76,6 +76,7 @@ export function AuthPage() {
         <h1>Welcome, {profile.displayName}</h1>
         <p className="lede">{profile.email}</p>
         <button type="button" onClick={logout}>Sign out</button>
+        <p><a href="/dashboard">Open dashboard</a></p>
         <p aria-live="polite">{message}</p>
       </main>
     )
