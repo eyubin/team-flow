@@ -21,6 +21,45 @@ make up
 
 Stop with `make down`. Demo data (below) is seeded automatically on first startup.
 
+## Local development (without Docker)
+
+Requires Java 25 and Node 20+. Postgres still runs via Compose; the backend and frontend run natively for faster edit/reload cycles.
+
+1. Start just the database:
+
+   ```bash
+   cp .env.example .env
+   docker compose --env-file .env -f infra/docker-compose.yml up -d postgres
+   ```
+
+2. Compile and run the backend (Spring Boot, port 8080):
+
+   ```bash
+   cd backend
+   ./mvnw -B compile   # compile only, or skip straight to spring-boot:run
+   DATABASE_URL=jdbc:postgresql://localhost:5432/teamflow \
+   DATABASE_USERNAME=teamflow \
+   DATABASE_PASSWORD=teamflow \
+   JWT_ACCESS_SECRET=local-dev-access-secret-change-me-32chars \
+   JWT_REFRESH_SECRET=local-dev-refresh-secret-change-me-32ch \
+   ./mvnw spring-boot:run
+   ```
+
+   Flyway migrations run automatically on startup. `./mvnw -B verify` runs the full test suite (needs Docker for Testcontainers).
+
+3. In a separate terminal, run the frontend (Vite dev server, port 5173, proxies `/api` and `/actuator` to `localhost:8080`):
+
+   ```bash
+   cd frontend
+   npm ci
+   npm run dev
+   ```
+
+- SPA (dev server, hot reload): http://localhost:5173
+- API health: http://localhost:8080/actuator/health
+
+Stop the database with `docker compose --env-file .env -f infra/docker-compose.yml down` when done.
+
 ## Demo accounts
 
 | Role | Email | Password |
