@@ -35,3 +35,13 @@ docs/       Stage 0 ADRs, diagrams, OpenAPI
 Auth (cookie JWT) is specified in [docs/adr/0002-cookie-jwt-auth.md](docs/adr/0002-cookie-jwt-auth.md) and implemented in Stage 2.
 
 Open http://localhost:3000/auth for the local registration and login flow. The API exposes `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/me`, `POST /api/auth/logout`, and `GET /api/auth/csrf`.
+
+## Demo accounts
+
+The local stack seeds one workspace, one project, and sample tasks on first startup:
+
+| Role | Email | Password |
+| --- | --- | --- |
+| Admin | `demo-admin@teamflow.local` | `TeamFlow-demo-123` |
+| Member | `demo-member@teamflow.local` | `TeamFlow-demo-123` |
+| Viewer | `demo-viewer@teamflow.local` | `TeamFlow-demo-123` |
