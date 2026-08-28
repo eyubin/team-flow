@@ -1,5 +1,8 @@
-import { useEffect, useState } from 'react'
-import type { FormEvent } from 'react'
+import { useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { isForbidden, request } from '../lib/api.ts'
 import { Forbidden } from '../components/Forbidden.tsx'
 
@@ -23,139 +26,164 @@ type Member = {
   role: 'ADMIN' | 'MEMBER' | 'VIEWER'
 }
 
+const workspaceSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(120),
+})
+
+const projectSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(120),
+})
+
+const memberSchema = z.object({
+  email: z.string().min(1, 'Email is required').max(320).email('Enter a valid email address'),
+  role: z.enum(['MEMBER', 'VIEWER', 'ADMIN']),
+})
+
+type WorkspaceValues = z.infer<typeof workspaceSchema>
+type ProjectValues = z.infer<typeof projectSchema>
+type MemberValues = z.infer<typeof memberSchema>
+
+async function fetchWorkspaces() {
+  await request('/api/auth/csrf')
+  return (await request('/api/workspaces')) as Workspace[]
+}
+
 export function DashboardPage() {
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
-  const [projects, setProjects] = useState<Project[]>([])
-  const [members, setMembers] = useState<Member[]>([])
-  const [workspaceName, setWorkspaceName] = useState('')
-  const [projectName, setProjectName] = useState('')
   const [selectedWorkspace, setSelectedWorkspace] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [forbidden, setForbidden] = useState(false)
   const [message, setMessage] = useState('')
   const [actionForbidden, setActionForbidden] = useState(false)
+  const queryClient = useQueryClient()
 
-  async function loadWorkspaces() {
-    const body = (await request('/api/workspaces')) as Workspace[]
-    setWorkspaces(body)
-    const workspace = body[0]
-    if (workspace) {
-      setSelectedWorkspace((current) => current || workspace.id)
-      setProjects((await request(`/api/workspaces/${workspace.id}/projects`)) as Project[])
-      setMembers((await request(`/api/workspaces/${workspace.id}/members`)) as Member[])
-    } else {
-      setProjects([])
-      setMembers([])
-    }
-  }
+  const workspacesQuery = useQuery({ queryKey: ['workspaces'], queryFn: fetchWorkspaces })
+  const workspaces = workspacesQuery.data ?? []
+  // Falls back to the first workspace until the user explicitly picks one, so a
+  // freshly created (or freshly loaded) workspace is usable without an extra click.
+  const activeWorkspace = selectedWorkspace || workspaces[0]?.id || ''
 
-  useEffect(() => {
-    request('/api/auth/csrf')
-      .then(() => loadWorkspaces())
-      .catch((error: unknown) => {
-        if (isForbidden(error)) setForbidden(true)
-        else setMessage(error instanceof Error ? error.message : 'Unable to load dashboard')
-      })
-      .finally(() => setLoading(false))
-  }, [])
+  const projectsQuery = useQuery({
+    queryKey: ['workspaces', activeWorkspace, 'projects'],
+    queryFn: () => request(`/api/workspaces/${activeWorkspace}/projects`) as Promise<Project[]>,
+    enabled: !!activeWorkspace,
+  })
+  const projects = projectsQuery.data ?? []
 
-  async function createWorkspace(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setActionForbidden(false)
-    try {
-      await request('/api/workspaces', { method: 'POST', body: JSON.stringify({ name: workspaceName }) })
-      setWorkspaceName('')
-      await loadWorkspaces()
+  const membersQuery = useQuery({
+    queryKey: ['workspaces', activeWorkspace, 'members'],
+    queryFn: () => request(`/api/workspaces/${activeWorkspace}/members`) as Promise<Member[]>,
+    enabled: !!activeWorkspace,
+  })
+  const members = membersQuery.data ?? []
+
+  const workspaceForm = useForm<WorkspaceValues>({ resolver: zodResolver(workspaceSchema), defaultValues: { name: '' } })
+  const projectForm = useForm<ProjectValues>({ resolver: zodResolver(projectSchema), defaultValues: { name: '' } })
+  const memberForm = useForm<MemberValues>({ resolver: zodResolver(memberSchema), defaultValues: { email: '', role: 'MEMBER' } })
+
+  const createWorkspaceMutation = useMutation({
+    mutationFn: (values: WorkspaceValues) => request('/api/workspaces', { method: 'POST', body: JSON.stringify(values) }),
+    onSuccess: () => {
+      workspaceForm.reset()
+      void queryClient.invalidateQueries({ queryKey: ['workspaces'] })
       setMessage('Workspace created')
-    } catch (error) {
+    },
+    onError: (error: unknown) => {
       if (isForbidden(error)) setActionForbidden(true)
       setMessage(error instanceof Error ? error.message : 'Unable to create workspace')
-    }
-  }
+    },
+  })
 
-  async function createProject(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!selectedWorkspace) return
-    setActionForbidden(false)
-    try {
-      await request(`/api/workspaces/${selectedWorkspace}/projects`, {
-        method: 'POST',
-        body: JSON.stringify({ name: projectName }),
-      })
-      setProjectName('')
-      setProjects((await request(`/api/workspaces/${selectedWorkspace}/projects`)) as Project[])
+  const createProjectMutation = useMutation({
+    mutationFn: (values: ProjectValues) =>
+      request(`/api/workspaces/${activeWorkspace}/projects`, { method: 'POST', body: JSON.stringify(values) }),
+    onSuccess: () => {
+      projectForm.reset()
+      void queryClient.invalidateQueries({ queryKey: ['workspaces', activeWorkspace, 'projects'] })
       setMessage('Project created')
-    } catch (error) {
+    },
+    onError: (error: unknown) => {
       if (isForbidden(error)) setActionForbidden(true)
       setMessage(error instanceof Error ? error.message : 'Unable to create project')
-    }
-  }
+    },
+  })
 
-  async function loadWorkspaceMembers(workspaceId: string) {
-    setMembers((await request(`/api/workspaces/${workspaceId}/members`)) as Member[])
-  }
-
-  async function addMember(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!selectedWorkspace) return
-    setActionForbidden(false)
-    const form = new FormData(event.currentTarget)
-    try {
-      await request(`/api/workspaces/${selectedWorkspace}/members`, {
-        method: 'POST',
-        body: JSON.stringify({ email: form.get('email'), role: form.get('role') }),
-      })
-      event.currentTarget.reset()
-      await loadWorkspaceMembers(selectedWorkspace)
+  const addMemberMutation = useMutation({
+    mutationFn: (values: MemberValues) =>
+      request(`/api/workspaces/${activeWorkspace}/members`, { method: 'POST', body: JSON.stringify(values) }),
+    onSuccess: () => {
+      memberForm.reset()
+      void queryClient.invalidateQueries({ queryKey: ['workspaces', activeWorkspace, 'members'] })
       setMessage('Member added')
-    } catch (error) {
+    },
+    onError: (error: unknown) => {
       if (isForbidden(error)) setActionForbidden(true)
       setMessage(error instanceof Error ? error.message : 'Unable to add member')
-    }
-  }
+    },
+  })
 
-  async function changeRole(member: Member, role: Member['role']) {
-    if (!selectedWorkspace || role === member.role) return
-    setActionForbidden(false)
-    try {
-      await request(`/api/workspaces/${selectedWorkspace}/members/${member.userId}`, {
-        method: 'PATCH', body: JSON.stringify({ role }),
-      })
-      await loadWorkspaceMembers(selectedWorkspace)
+  const changeRoleMutation = useMutation({
+    mutationFn: ({ member, role }: { member: Member; role: Member['role'] }) =>
+      request(`/api/workspaces/${activeWorkspace}/members/${member.userId}`, { method: 'PATCH', body: JSON.stringify({ role }) }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['workspaces', activeWorkspace, 'members'] })
       setMessage('Member role updated')
-    } catch (error) {
+    },
+    onError: (error: unknown) => {
       if (isForbidden(error)) setActionForbidden(true)
       setMessage(error instanceof Error ? error.message : 'Unable to update role')
-    }
-  }
+    },
+  })
 
-  async function removeMember(member: Member) {
-    if (!selectedWorkspace || !window.confirm(`Remove ${member.displayName}?`)) return
-    setActionForbidden(false)
-    try {
-      await request(`/api/workspaces/${selectedWorkspace}/members/${member.userId}`, { method: 'DELETE' })
-      await loadWorkspaceMembers(selectedWorkspace)
+  const removeMemberMutation = useMutation({
+    mutationFn: (member: Member) =>
+      request(`/api/workspaces/${activeWorkspace}/members/${member.userId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['workspaces', activeWorkspace, 'members'] })
       setMessage('Member removed')
-    } catch (error) {
+    },
+    onError: (error: unknown) => {
       if (isForbidden(error)) setActionForbidden(true)
       setMessage(error instanceof Error ? error.message : 'Unable to remove member')
-    }
+    },
+  })
+
+  function changeRole(member: Member, role: Member['role']) {
+    if (!activeWorkspace || role === member.role) return
+    setActionForbidden(false)
+    changeRoleMutation.mutate({ member, role })
   }
+
+  function removeMember(member: Member) {
+    if (!activeWorkspace || !window.confirm(`Remove ${member.displayName}?`)) return
+    setActionForbidden(false)
+    removeMemberMutation.mutate(member)
+  }
+
+  const loading = workspacesQuery.isLoading
+  const forbidden = isForbidden(workspacesQuery.error) || isForbidden(projectsQuery.error) || isForbidden(membersQuery.error)
 
   if (loading) return <main className="page"><p aria-live="polite">Loading dashboard...</p></main>
   if (forbidden) return <Forbidden message="You don't have access to this dashboard." />
+
+  const myRole = workspaces.find((workspace) => workspace.id === activeWorkspace)?.myRole
 
   return (
     <main className="page dashboard-page">
       <p className="eyebrow">TeamFlow workspace</p>
       <h1>Project dashboard</h1>
       <p className="lede">Create a workspace, then give it a project to hold future tasks.</p>
-      <form onSubmit={createWorkspace} className="inline-form">
+      <form
+        onSubmit={workspaceForm.handleSubmit((values) => {
+          setActionForbidden(false)
+          createWorkspaceMutation.mutate(values)
+        })}
+        className="inline-form"
+        noValidate
+      >
         <label>
           New workspace
-          <input value={workspaceName} onChange={(event) => setWorkspaceName(event.target.value)} required maxLength={120} />
+          <input {...workspaceForm.register('name')} maxLength={120} aria-invalid={!!workspaceForm.formState.errors.name} />
+          {workspaceForm.formState.errors.name && <span role="alert" className="field-error">{workspaceForm.formState.errors.name.message}</span>}
         </label>
-        <button type="submit">Create workspace</button>
+        <button type="submit" disabled={createWorkspaceMutation.isPending}>Create workspace</button>
       </form>
       {workspaces.length === 0 ? (
         <p className="empty-state">No workspaces yet.</p>
@@ -163,20 +191,28 @@ export function DashboardPage() {
         <>
           <label>
             Workspace
-            <select aria-label="Workspace" value={selectedWorkspace} onChange={async (event) => {
-              setSelectedWorkspace(event.target.value)
-              setProjects((await request(`/api/workspaces/${event.target.value}/projects`)) as Project[])
-              await loadWorkspaceMembers(event.target.value)
-            }}>
+            <select
+              aria-label="Workspace"
+              value={activeWorkspace}
+              onChange={(event) => setSelectedWorkspace(event.target.value)}
+            >
               {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name} ({workspace.myRole})</option>)}
             </select>
           </label>
-          <form onSubmit={createProject} className="inline-form">
+          <form
+            onSubmit={projectForm.handleSubmit((values) => {
+              setActionForbidden(false)
+              createProjectMutation.mutate(values)
+            })}
+            className="inline-form"
+            noValidate
+          >
             <label>
               New project
-              <input value={projectName} onChange={(event) => setProjectName(event.target.value)} required maxLength={120} />
+              <input {...projectForm.register('name')} maxLength={120} aria-invalid={!!projectForm.formState.errors.name} />
+              {projectForm.formState.errors.name && <span role="alert" className="field-error">{projectForm.formState.errors.name.message}</span>}
             </label>
-            <button type="submit">Create project</button>
+            <button type="submit" disabled={createProjectMutation.isPending}>Create project</button>
           </form>
           <section aria-labelledby="projects-heading">
             <h2 id="projects-heading">Projects</h2>
@@ -190,10 +226,34 @@ export function DashboardPage() {
             <h2 id="members-heading">Members</h2>
             {members.length === 0 ? <p className="empty-state">No members found.</p> : (
               <ul className="member-list">
-                {members.map((member) => <li key={member.userId}><span><strong>{member.displayName}</strong><small>{member.email}</small></span>{workspaces.find((workspace) => workspace.id === selectedWorkspace)?.myRole === 'ADMIN' ? <><select aria-label={`Role for ${member.displayName}`} value={member.role} onChange={(event) => changeRole(member, event.target.value as Member['role'])}><option value="ADMIN">Admin</option><option value="MEMBER">Member</option><option value="VIEWER">Viewer</option></select><button type="button" className="danger-button" onClick={() => removeMember(member)}>Remove</button></> : <span>{member.role}</span>}</li>)}
+                {members.map((member) => <li key={member.userId}><span><strong>{member.displayName}</strong><small>{member.email}</small></span>{myRole === 'ADMIN' ? <><select aria-label={`Role for ${member.displayName}`} value={member.role} onChange={(event) => changeRole(member, event.target.value as Member['role'])}><option value="ADMIN">Admin</option><option value="MEMBER">Member</option><option value="VIEWER">Viewer</option></select><button type="button" className="danger-button" onClick={() => removeMember(member)}>Remove</button></> : <span>{member.role}</span>}</li>)}
               </ul>
             )}
-            {workspaces.find((workspace) => workspace.id === selectedWorkspace)?.myRole === 'ADMIN' && <form onSubmit={addMember} className="inline-form"><label>Email<input name="email" type="email" required /></label><label>Role<select aria-label="Role" name="role" defaultValue="MEMBER"><option value="MEMBER">Member</option><option value="VIEWER">Viewer</option><option value="ADMIN">Admin</option></select></label><button type="submit">Add member</button></form>}
+            {myRole === 'ADMIN' && (
+              <form
+                onSubmit={memberForm.handleSubmit((values) => {
+                  setActionForbidden(false)
+                  addMemberMutation.mutate(values)
+                })}
+                className="inline-form"
+                noValidate
+              >
+                <label>
+                  Email
+                  <input type="email" {...memberForm.register('email')} aria-invalid={!!memberForm.formState.errors.email} />
+                  {memberForm.formState.errors.email && <span role="alert" className="field-error">{memberForm.formState.errors.email.message}</span>}
+                </label>
+                <label>
+                  Role
+                  <select aria-label="Role" {...memberForm.register('role')}>
+                    <option value="MEMBER">Member</option>
+                    <option value="VIEWER">Viewer</option>
+                    <option value="ADMIN">Admin</option>
+                  </select>
+                </label>
+                <button type="submit" disabled={addMemberMutation.isPending}>Add member</button>
+              </form>
+            )}
           </section>
         </>
       )}

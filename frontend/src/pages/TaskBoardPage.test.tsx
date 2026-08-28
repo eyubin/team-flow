@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, waitFor, cleanup } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { createTestQueryClient } from '../test/queryClient.ts'
 import { TaskBoardPage } from './TaskBoardPage.tsx'
 
 function response(body: unknown, ok = true, status = 200) {
@@ -9,11 +11,13 @@ function response(body: unknown, ok = true, status = 200) {
 
 function renderBoard() {
   return render(
-    <MemoryRouter initialEntries={['/projects/project-1/tasks']}>
-      <Routes>
-        <Route path="/projects/:projectId/tasks" element={<TaskBoardPage />} />
-      </Routes>
-    </MemoryRouter>,
+    <QueryClientProvider client={createTestQueryClient()}>
+      <MemoryRouter initialEntries={['/projects/project-1/tasks']}>
+        <Routes>
+          <Route path="/projects/:projectId/tasks" element={<TaskBoardPage />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
   )
 }
 

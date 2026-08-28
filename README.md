@@ -72,7 +72,7 @@ The backend is organized by business capability (`auth`, `workspace`, `task`, `a
 
 | Layer | Stack | Why |
 | --- | --- | --- |
-| Frontend | React 19, TypeScript, Vite, React Router | Small, fast dev loop; no framework weight this app doesn't need |
+| Frontend | React 19, TypeScript, Vite, React Router, TanStack Query, React Hook Form + Zod | Server state and caching handled by Query instead of hand-rolled `useState`/`fetch`; forms get schema-validated, typed submission with inline error messages instead of relying on native HTML validation |
 | Frontend tests | Vitest, React Testing Library, Playwright | Component tests close to the code, E2E against the real Compose stack (no mocking) |
 | Backend | Java 25, Spring Boot 4, Spring Security, Spring Data JPA | Mainstream, well-documented, matches what most teams actually run |
 | Database | PostgreSQL 16, Flyway | Real constraints and indexes in CI via Testcontainers, not H2 |
@@ -120,9 +120,8 @@ Deliberately out of scope for this MVP: microservices, Kubernetes, a custom OAut
 
 What's genuinely still missing, in rough priority order:
 
-1. **TanStack Query and React Hook Form** — the plan's spec'd frontend stack, not yet adopted. State and forms are currently hand-rolled `useState`/`fetch` in `TaskBoardPage`/`DashboardPage`; they work and are tested, but a migration is planned as its own isolated change rather than bundled into feature work, given the regression risk of rewriting working, tested code for stack-compliance alone.
-2. **GHCR release images and a staging deployment** — no public hosting target is selected yet, so there's no `release` workflow (publishing images with no target to deploy them to isn't real continuous delivery).
-3. **Login rate limiting** — explicitly deferred past the MVP per the project's own security checklist.
+1. **GHCR release images and a staging deployment** — no public hosting target is selected yet, so there's no `release` workflow (publishing images with no target to deploy them to isn't real continuous delivery).
+2. **Login rate limiting** — explicitly deferred past the MVP per the project's own security checklist.
 
 One deliberate non-goal worth naming: `frontend/.trivyignore` currently suppresses 9 nginx CVEs in the base image whose fix Trivy's advisory data cites but Alpine hasn't published yet. Dependabot watches that Dockerfile, so the ignore entries should become removable, not permanent.
 
