@@ -54,5 +54,9 @@ jobs:
       - run: curl -fsS http://localhost:8080/actuator/health | grep '"status":"UP"'
       - run: curl -fsS http://localhost:3000/actuator/health | grep '"status":"UP"'
       - run: curl -fsS http://localhost:3000/ | grep -q TeamFlow
+      - name: Validate OpenAPI contract
+        run: |
+          curl -fsS http://localhost:8080/v3/api-docs -o api-docs.json
+          jq -e '.openapi and .paths["/api/auth/login"] and .paths["/api/projects/{projectId}/tasks"] and .paths["/api/workspaces"]' api-docs.json > /dev/null
       - if: always()
         run: docker compose --env-file .env -f infra/docker-compose.yml down -v
