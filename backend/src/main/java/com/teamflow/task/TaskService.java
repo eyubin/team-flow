@@ -6,6 +6,7 @@ import com.teamflow.workspace.ProjectRepository;
 import com.teamflow.workspace.Role;
 import com.teamflow.workspace.WorkspaceMember;
 import com.teamflow.workspace.WorkspaceMemberRepository;
+import com.teamflow.shared.web.OptimisticLockException;
 import java.time.LocalDate;
 import java.util.UUID;
 import java.util.Map;
@@ -76,7 +77,7 @@ public class TaskService {
         Project project = requireProject(task.getProjectId());
         requireWriteRole(userId, project);
         if (!task.getVersion().equals(request.version())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Task version is stale; current version is " + task.getVersion());
+            throw new OptimisticLockException(taskId, task.getVersion());
         }
         validateAssignee(userId, project, request.assigneeId());
         task.update(request.title(), request.description(), request.status(), request.priority(), request.assigneeId(), request.dueDate());

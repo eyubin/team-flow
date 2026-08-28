@@ -102,19 +102,30 @@ class TeamflowApplicationTests {
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
               UUID projectId = UUID.fromString(project.replaceAll(".*\\\"id\\\":\\\"([^\\\"]+).*$", "$1"));
 
-              mockMvc.perform(post("/api/projects/" + projectId + "/tasks")
+              String task = mockMvc.perform(post("/api/projects/" + projectId + "/tasks")
                   .with(authentication(auth)).with(csrf())
                   .contentType("application/json")
                   .content("{\"title\":\"Ship task API\",\"status\":\"IN_PROGRESS\",\"priority\":\"HIGH\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("IN_PROGRESS"))
-                .andExpect(jsonPath("$.version").value(0));
+                .andExpect(jsonPath("$.version").value(0))
+                .andReturn().getResponse().getContentAsString();
 
               mockMvc.perform(get("/api/projects/" + projectId + "/tasks?status=IN_PROGRESS&size=10")
                   .with(authentication(auth)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.content[0].title").value("Ship task API"));
+
+                UUID taskId = UUID.fromString(task.replaceAll(".*\\\"id\\\":\\\"([^\\\"]+).*$", "$1"));
+                mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch(
+                      "/api/tasks/" + taskId)
+                    .with(authentication(auth)).with(csrf())
+                    .contentType("application/json")
+                    .content("{\"version\":99,\"title\":\"Stale update\"}"))
+                  .andExpect(status().isConflict())
+                  .andExpect(jsonPath("$.type").value("urn:teamflow:problem:optimistic-lock"))
+                  .andExpect(jsonPath("$.currentVersion").value(0));
                 }
 
                   @Test
