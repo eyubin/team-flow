@@ -49,5 +49,14 @@ public class AuthService {
     public String accessToken(User user) { return jwtService.accessToken(user); }
     public String refreshToken(User user) { return jwtService.refreshToken(user); }
 
+    @Transactional(readOnly = true)
+    public User refresh(String token) {
+        try {
+            return requireUser(jwtService.parseRefreshSubject(token));
+        } catch (RuntimeException exception) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid refresh token");
+        }
+    }
+
     private static String normalize(String email) { return email.trim().toLowerCase(Locale.ROOT); }
 }

@@ -16,7 +16,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import jakarta.servlet.http.Cookie;
 import java.util.List;
 import java.util.UUID;
 
@@ -80,6 +82,26 @@ class TeamflowApplicationTests {
             .andExpect(cookie().exists("access_token"))
             .andExpect(cookie().exists("refresh_token"));
       }
+
+                @Test
+                void refreshRenewsAccessCookieAndRejectsInvalidToken() throws Exception {
+              String email = UUID.randomUUID() + "@example.com";
+              MvcResult registration = mockMvc.perform(post("/api/auth/register").with(csrf())
+                  .contentType("application/json")
+                  .content("{\"email\":\"" + email + "\",\"password\":\"password123\",\"displayName\":\"Refresh Tester\"}"))
+                .andExpect(status().isCreated())
+                .andReturn();
+              Cookie refreshCookie = registration.getResponse().getCookie("refresh_token");
+              assertThat(refreshCookie).isNotNull();
+
+              mockMvc.perform(post("/api/auth/refresh").with(csrf()).cookie(refreshCookie))
+                .andExpect(status().isNoContent())
+                .andExpect(cookie().exists("access_token"));
+
+              mockMvc.perform(post("/api/auth/refresh").with(csrf())
+                  .cookie(new Cookie("refresh_token", "not-a-jwt")))
+                .andExpect(status().isUnauthorized());
+                }
 
                 @Test
                 void authenticatedUserCanCreateAndFilterTasks() throws Exception {

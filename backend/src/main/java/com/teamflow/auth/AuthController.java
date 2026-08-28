@@ -1,6 +1,8 @@
 package com.teamflow.auth;
 
 import jakarta.validation.Valid;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
 import java.time.Duration;
 import java.util.UUID;
 import org.springframework.http.HttpHeaders;
@@ -45,6 +47,18 @@ public class AuthController {
         return ResponseEntity.noContent().build();
     }
 
+    @PostMapping("/refresh")
+    public ResponseEntity<Void> refresh(HttpServletRequest request) {
+        String token = cookieValue(request, "refresh_token");
+        if (token == null || token.isBlank()) {
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid refresh token");
+        }
+        User user = authService.refresh(token);
+        return ResponseEntity.noContent()
+                .header(HttpHeaders.SET_COOKIE, cookie("access_token", authService.accessToken(user), ACCESS_TTL, "/api"))
+                .build();
+    }
+
     @PostMapping("/logout")
     public ResponseEntity<Void> logout() {
         return ResponseEntity.noContent()
@@ -66,5 +80,13 @@ public class AuthController {
 
     private static String expiredCookie(String name, String path) {
         return ResponseCookie.from(name, "").httpOnly(true).secure(false).sameSite("Lax").path(path).maxAge(Duration.ZERO).build().toString();
+    }
+
+    private static String cookieValue(HttpServletRequest request, String name) {
+        if (request.getCookies() == null) return null;
+        for (Cookie cookie : request.getCookies()) {
+            if (name.equals(cookie.getName())) return cookie.getValue();
+        }
+        return null;
     }
 }
