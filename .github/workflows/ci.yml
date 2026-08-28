@@ -49,6 +49,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
       - run: cp .env.example .env
       - run: docker compose --env-file .env -f infra/docker-compose.yml up --build -d --wait
       - run: curl -fsS http://localhost:8080/actuator/health | grep '"status":"UP"'
@@ -58,5 +67,14 @@ jobs:
         run: |
           curl -fsS http://localhost:8080/v3/api-docs -o api-docs.json
           jq -e '.openapi and .paths["/api/auth/login"] and .paths["/api/projects/{projectId}/tasks"] and .paths["/api/workspaces"]' api-docs.json > /dev/null
+      - name: E2E tests against the Compose stack
+        run: npx playwright test
+        working-directory: frontend
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 7
       - if: always()
         run: docker compose --env-file .env -f infra/docker-compose.yml down -v

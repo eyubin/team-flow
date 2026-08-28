@@ -11,3 +11,6 @@ backend/.idea/
 frontend/node_modules/
 frontend/dist/
 frontend/*.tsbuildinfo
+frontend/coverage/
+frontend/playwright-report/
+frontend/test-results/

@@ -23,6 +23,7 @@ export function TaskBoardPage() {
   const [title, setTitle] = useState('')
   const [status, setStatus] = useState<Task['status']>('TODO')
   const [priority, setPriority] = useState<Task['priority']>('MEDIUM')
+  const [assigneeId, setAssigneeId] = useState('')
   const [filterStatus, setFilterStatus] = useState<Task['status'] | ''>('')
   const [filterPriority, setFilterPriority] = useState<Task['priority'] | ''>('')
   const [assigneeFilter, setAssigneeFilter] = useState('')
@@ -34,6 +35,7 @@ export function TaskBoardPage() {
   const [editTitle, setEditTitle] = useState('')
   const [editStatus, setEditStatus] = useState<Task['status']>('TODO')
   const [editPriority, setEditPriority] = useState<Task['priority']>('MEDIUM')
+  const [editAssigneeId, setEditAssigneeId] = useState('')
   const [commentBody, setCommentBody] = useState('')
   const [comments, setComments] = useState<Comment[]>([])
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([])
@@ -66,9 +68,10 @@ export function TaskBoardPage() {
     try {
       await request(`/api/projects/${projectId}/tasks`, {
         method: 'POST',
-        body: JSON.stringify({ title, status, priority }),
+        body: JSON.stringify({ title, status, priority, assigneeId: assigneeId.trim() || null }),
       })
       setTitle('')
+      setAssigneeId('')
       await loadTasks()
       setMessage('Task created')
     } catch (error) {
@@ -84,6 +87,7 @@ export function TaskBoardPage() {
     setEditTitle(task.title)
     setEditStatus(task.status)
     setEditPriority(task.priority)
+    setEditAssigneeId(task.assigneeId ?? '')
     try {
       const [commentList, auditPage] = await Promise.all([
         request(`/api/tasks/${task.id}/comments`),
@@ -103,7 +107,13 @@ export function TaskBoardPage() {
     try {
       const updated = (await request(`/api/tasks/${selectedTask.id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ version: selectedTask.version, title: editTitle, status: editStatus, priority: editPriority }),
+        body: JSON.stringify({
+          version: selectedTask.version,
+          title: editTitle,
+          status: editStatus,
+          priority: editPriority,
+          assigneeId: editAssigneeId.trim() || null,
+        }),
       })) as Task
       setTasks((current) => current.map((task) => task.id === updated.id ? updated : task))
       setSelectedTask(updated)
@@ -175,7 +185,7 @@ export function TaskBoardPage() {
         </label>
         <label>
           Status
-          <select value={status} onChange={(event) => setStatus(event.target.value as Task['status'])}>
+          <select aria-label="Status" value={status} onChange={(event) => setStatus(event.target.value as Task['status'])}>
             <option value="TODO">To do</option>
             <option value="IN_PROGRESS">In progress</option>
             <option value="DONE">Done</option>
@@ -183,18 +193,22 @@ export function TaskBoardPage() {
         </label>
         <label>
           Priority
-          <select value={priority} onChange={(event) => setPriority(event.target.value as Task['priority'])}>
+          <select aria-label="Priority" value={priority} onChange={(event) => setPriority(event.target.value as Task['priority'])}>
             <option value="LOW">Low</option>
             <option value="MEDIUM">Medium</option>
             <option value="HIGH">High</option>
           </select>
         </label>
+        <label>
+          Assignee ID
+          <input value={assigneeId} onChange={(event) => setAssigneeId(event.target.value)} placeholder="Optional UUID" />
+        </label>
         <button type="submit">Create task</button>
       </form>
       <form className="filter-form" onSubmit={(event) => { event.preventDefault(); void loadTasks() }}>
-        <label>Filter status<select value={filterStatus} onChange={(event) => setFilterStatus(event.target.value as Task['status'] | '')}><option value="">All statuses</option><option value="TODO">To do</option><option value="IN_PROGRESS">In progress</option><option value="DONE">Done</option></select></label>
-        <label>Filter priority<select value={filterPriority} onChange={(event) => setFilterPriority(event.target.value as Task['priority'] | '')}><option value="">All priorities</option><option value="LOW">Low</option><option value="MEDIUM">Medium</option><option value="HIGH">High</option></select></label>
-        <label>Assignee ID<input value={assigneeFilter} onChange={(event) => setAssigneeFilter(event.target.value)} placeholder="Optional UUID" /></label>
+        <label>Filter status<select aria-label="Filter status" value={filterStatus} onChange={(event) => setFilterStatus(event.target.value as Task['status'] | '')}><option value="">All statuses</option><option value="TODO">To do</option><option value="IN_PROGRESS">In progress</option><option value="DONE">Done</option></select></label>
+        <label>Filter priority<select aria-label="Filter priority" value={filterPriority} onChange={(event) => setFilterPriority(event.target.value as Task['priority'] | '')}><option value="">All priorities</option><option value="LOW">Low</option><option value="MEDIUM">Medium</option><option value="HIGH">High</option></select></label>
+        <label>Filter by assignee ID<input value={assigneeFilter} onChange={(event) => setAssigneeFilter(event.target.value)} placeholder="Optional UUID" /></label>
         <button type="submit">Apply filters</button>
         <button type="button" className="link-button" onClick={() => { setFilterStatus(''); setFilterPriority(''); setAssigneeFilter(''); }}>Clear</button>
       </form>
@@ -208,8 +222,9 @@ export function TaskBoardPage() {
           <h2 id="task-detail-heading">Task details</h2>
           <form onSubmit={updateTask} className="inline-form">
             <label>Title<input value={editTitle} onChange={(event) => setEditTitle(event.target.value)} required maxLength={200} /></label>
-            <label>Status<select value={editStatus} onChange={(event) => setEditStatus(event.target.value as Task['status'])}><option value="TODO">To do</option><option value="IN_PROGRESS">In progress</option><option value="DONE">Done</option></select></label>
-            <label>Priority<select value={editPriority} onChange={(event) => setEditPriority(event.target.value as Task['priority'])}><option value="LOW">Low</option><option value="MEDIUM">Medium</option><option value="HIGH">High</option></select></label>
+            <label>Status<select aria-label="Task status" value={editStatus} onChange={(event) => setEditStatus(event.target.value as Task['status'])}><option value="TODO">To do</option><option value="IN_PROGRESS">In progress</option><option value="DONE">Done</option></select></label>
+            <label>Priority<select aria-label="Task priority" value={editPriority} onChange={(event) => setEditPriority(event.target.value as Task['priority'])}><option value="LOW">Low</option><option value="MEDIUM">Medium</option><option value="HIGH">High</option></select></label>
+            <label>Task assignee ID<input value={editAssigneeId} onChange={(event) => setEditAssigneeId(event.target.value)} placeholder="Optional UUID" /></label>
             <button type="submit">Save task</button>
             <button type="button" className="danger-button" onClick={deleteSelectedTask}>Delete task</button>
           </form>

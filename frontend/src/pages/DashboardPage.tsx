@@ -163,7 +163,7 @@ export function DashboardPage() {
         <>
           <label>
             Workspace
-            <select value={selectedWorkspace} onChange={async (event) => {
+            <select aria-label="Workspace" value={selectedWorkspace} onChange={async (event) => {
               setSelectedWorkspace(event.target.value)
               setProjects((await request(`/api/workspaces/${event.target.value}/projects`)) as Project[])
               await loadWorkspaceMembers(event.target.value)
@@ -193,7 +193,7 @@ export function DashboardPage() {
                 {members.map((member) => <li key={member.userId}><span><strong>{member.displayName}</strong><small>{member.email}</small></span>{workspaces.find((workspace) => workspace.id === selectedWorkspace)?.myRole === 'ADMIN' ? <><select aria-label={`Role for ${member.displayName}`} value={member.role} onChange={(event) => changeRole(member, event.target.value as Member['role'])}><option value="ADMIN">Admin</option><option value="MEMBER">Member</option><option value="VIEWER">Viewer</option></select><button type="button" className="danger-button" onClick={() => removeMember(member)}>Remove</button></> : <span>{member.role}</span>}</li>)}
               </ul>
             )}
-            {workspaces.find((workspace) => workspace.id === selectedWorkspace)?.myRole === 'ADMIN' && <form onSubmit={addMember} className="inline-form"><label>Email<input name="email" type="email" required /></label><label>Role<select name="role" defaultValue="MEMBER"><option value="MEMBER">Member</option><option value="VIEWER">Viewer</option><option value="ADMIN">Admin</option></select></label><button type="submit">Add member</button></form>}
+            {workspaces.find((workspace) => workspace.id === selectedWorkspace)?.myRole === 'ADMIN' && <form onSubmit={addMember} className="inline-form"><label>Email<input name="email" type="email" required /></label><label>Role<select aria-label="Role" name="role" defaultValue="MEMBER"><option value="MEMBER">Member</option><option value="VIEWER">Viewer</option><option value="ADMIN">Admin</option></select></label><button type="submit">Add member</button></form>}
           </section>
         </>
       )}

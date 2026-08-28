@@ -13,6 +13,7 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.session.NullAuthenticatedSessionStrategy;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
@@ -72,7 +73,14 @@ public class SecurityConfig {
         CsrfTokenRequestAttributeHandler requestHandler = new CsrfTokenRequestAttributeHandler();
         requestHandler.setCsrfRequestAttributeName("_csrf");
 
-        http.csrf(csrf -> csrf.csrfTokenRepository(csrfRepo).csrfTokenRequestHandler(requestHandler))
+        http.csrf(csrf -> csrf.csrfTokenRepository(csrfRepo)
+                        .csrfTokenRequestHandler(requestHandler)
+                        // CsrfConfigurer otherwise auto-wires its own CsrfAuthenticationStrategy, which
+                        // rotates/deletes the XSRF-TOKEN cookie on every authenticated request. That's
+                        // meant to fire once per login, but under stateless JWT auth every request
+                        // re-authenticates from the access-token cookie, so it fired constantly and
+                        // silently broke every mutation that followed a plain GET.
+                        .sessionAuthenticationStrategy(new NullAuthenticatedSessionStrategy()))
                 .cors(Customizer.withDefaults())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(
