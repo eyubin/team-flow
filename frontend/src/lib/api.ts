@@ -15,6 +15,14 @@ export function csrfToken() {
   return document.cookie.split('; ').find((cookie) => cookie.startsWith('XSRF-TOKEN='))?.split('=')[1]
 }
 
+let unauthorizedHandler: (() => void) | null = null
+
+// Lets App register a redirect-to-login for session expiry that happens mid-page,
+// after RequireAuth has already let the user in.
+export function onUnauthorized(handler: (() => void) | null) {
+  unauthorizedHandler = handler
+}
+
 export async function request(url: string, options: RequestInit = {}) {
   const response = await fetch(url, {
     ...options,
@@ -25,6 +33,9 @@ export async function request(url: string, options: RequestInit = {}) {
       ...options.headers,
     },
   })
+  if (response.status === 401) {
+    unauthorizedHandler?.()
+  }
   if (!response.ok) {
     const problem = (await response.json().catch(() => null)) as { detail?: string } | null
     throw new ApiError(response.status, problem?.detail)

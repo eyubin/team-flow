@@ -1,9 +1,11 @@
 COMPOSE := docker compose --env-file .env -f infra/docker-compose.yml
+COMPOSE_DEV := $(COMPOSE) -f infra/docker-compose.dev.yml
 
-.PHONY: help env up down logs ps test backend-test frontend-test frontend-install e2e
+.PHONY: help env up dev down logs ps test backend-test frontend-test frontend-install e2e
 
 help:
 	@echo "make up              Build and start Postgres, API, and SPA"
+	@echo "make dev             Same, but SPA runs the Vite dev server with hot reload"
 	@echo "make down            Stop the stack (keeps the database volume)"
 	@echo "make test            Backend + frontend tests"
 	@echo "make backend-test    Spring Boot tests (Testcontainers)"
@@ -15,6 +17,9 @@ env:
 
 up: env
 	$(COMPOSE) up --build
+
+dev: env
+	$(COMPOSE_DEV) up --build
 
 down:
 	$(COMPOSE) down

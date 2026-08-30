@@ -21,6 +21,10 @@ make up
 
 Stop with `make down`. Demo data (below) is seeded automatically on first startup.
 
+### Hot reload inside Docker
+
+`make up` builds the SPA as a static production bundle, so frontend edits need a rebuild. For a full Docker stack where the SPA hot-reloads on save instead, use `make dev`: it runs the same Postgres and API containers but swaps the frontend for the Vite dev server (source mounted as a volume, proxying `/api` and `/actuator` to the `backend` container). Same URL, `http://localhost:3000`. Stop with `make down`.
+
 ## Local development (without Docker)
 
 Requires Java 25 and Node 20+. Postgres still runs via Compose; the backend and frontend run natively for faster edit/reload cycles.
