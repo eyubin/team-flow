@@ -45,7 +45,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push backend image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: backend
           push: true
@@ -54,7 +54,7 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/teamflow-backend:latest
 
       - name: Build and push frontend image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: frontend
           push: true
