@@ -4,6 +4,8 @@ import type { Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
+import { Box, Button, Card, Flex, Heading, Link, Text, TextField } from '@radix-ui/themes'
 
 const csrfCookie = 'XSRF-TOKEN'
 
@@ -66,6 +68,7 @@ export function AuthPage() {
   const [mode, setMode] = useState<Mode>('login')
   const [message, setMessage] = useState('')
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
 
   const profileQuery = useQuery({ queryKey: ['auth', 'me'], queryFn: fetchProfile })
 
@@ -84,6 +87,7 @@ export function AuthPage() {
     onSuccess: (profile) => {
       queryClient.setQueryData(['auth', 'me'], profile)
       setMessage('Signed in')
+      navigate('/dashboard')
     },
     onError: (error: unknown) => {
       setMessage(error instanceof Error ? error.message : 'Request failed')
@@ -112,48 +116,106 @@ export function AuthPage() {
 
   if (profile) {
     return (
-      <main className="page">
-        <p className="eyebrow">TeamFlow account</p>
-        <h1>Welcome, {profile.displayName}</h1>
-        <p className="lede">{profile.email}</p>
-        <button type="button" onClick={() => logoutMutation.mutate()} disabled={logoutMutation.isPending}>Sign out</button>
-        <p><a href="/dashboard">Open dashboard</a></p>
-        <p aria-live="polite">{message}</p>
-      </main>
+      <Box asChild maxWidth="30rem">
+        <main>
+          <Flex direction="column" gap="3">
+            <Text size="1" color="iris" weight="bold" style={{ letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+              TeamFlow account
+            </Text>
+            <Heading as="h1" size="7">
+              Welcome, {profile.displayName}
+            </Heading>
+            <Text as="p" color="gray">
+              {profile.email}
+            </Text>
+            <Flex gap="3" align="center">
+              <Button type="button" variant="soft" color="gray" onClick={() => logoutMutation.mutate()} disabled={logoutMutation.isPending}>
+                Sign out
+              </Button>
+              <Link href="/dashboard">Open dashboard</Link>
+            </Flex>
+            <Text aria-live="polite" as="p" color="gray" size="2">
+              {message}
+            </Text>
+          </Flex>
+        </main>
+      </Box>
     )
   }
 
   return (
-    <main className="page auth-page">
-      <p className="eyebrow">TeamFlow account</p>
-      <h1>{mode === 'login' ? 'Sign in' : 'Create your account'}</h1>
-      <p className="lede">Use the local account flow to enter your workspace.</p>
-      <form onSubmit={handleSubmit(onSubmit)} className="auth-form" noValidate>
-        {mode === 'register' && (
-          <label>
-            Display name
-            <input {...register('displayName')} maxLength={80} aria-invalid={!!errors.displayName} />
-            {errors.displayName && <span role="alert" className="field-error">{errors.displayName.message}</span>}
-          </label>
-        )}
-        <label>
-          Email
-          <input type="email" {...register('email')} maxLength={320} aria-invalid={!!errors.email} />
-          {errors.email && <span role="alert" className="field-error">{errors.email.message}</span>}
-        </label>
-        <label>
-          Password
-          <input type="password" {...register('password')} maxLength={128} aria-invalid={!!errors.password} />
-          {errors.password && <span role="alert" className="field-error">{errors.password.message}</span>}
-        </label>
-        <button type="submit" disabled={authMutation.isPending}>
-          {authMutation.isPending ? 'Working...' : mode === 'login' ? 'Sign in' : 'Register'}
-        </button>
-      </form>
-      <button type="button" className="link-button" onClick={toggleMode}>
-        {mode === 'login' ? 'Need an account?' : 'Already registered?'}
-      </button>
-      <p aria-live="polite" className="form-message">{message}</p>
-    </main>
+    <Box asChild maxWidth="26rem">
+      <main>
+        <Flex direction="column" gap="3" mb="4">
+          <Text size="1" color="iris" weight="bold" style={{ letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            TeamFlow account
+          </Text>
+          <Heading as="h1" size="7">
+            {mode === 'login' ? 'Sign in' : 'Create your account'}
+          </Heading>
+          <Text as="p" color="gray">
+            Use the local account flow to enter your workspace.
+          </Text>
+        </Flex>
+        <Card size="3">
+          <form onSubmit={handleSubmit(onSubmit)} noValidate>
+            <Flex direction="column" gap="4">
+              {mode === 'register' && (
+                <Flex asChild direction="column" gap="1">
+                  <label>
+                    <Text weight="medium" size="2">
+                      Display name
+                    </Text>
+                    <TextField.Root {...register('displayName')} maxLength={80} aria-invalid={!!errors.displayName} />
+                    {errors.displayName && (
+                      <Text role="alert" color="red" size="1">
+                        {errors.displayName.message}
+                      </Text>
+                    )}
+                  </label>
+                </Flex>
+              )}
+              <Flex asChild direction="column" gap="1">
+                <label>
+                  <Text weight="medium" size="2">
+                    Email
+                  </Text>
+                  <TextField.Root type="email" {...register('email')} maxLength={320} aria-invalid={!!errors.email} />
+                  {errors.email && (
+                    <Text role="alert" color="red" size="1">
+                      {errors.email.message}
+                    </Text>
+                  )}
+                </label>
+              </Flex>
+              <Flex asChild direction="column" gap="1">
+                <label>
+                  <Text weight="medium" size="2">
+                    Password
+                  </Text>
+                  <TextField.Root type="password" {...register('password')} maxLength={128} aria-invalid={!!errors.password} />
+                  {errors.password && (
+                    <Text role="alert" color="red" size="1">
+                      {errors.password.message}
+                    </Text>
+                  )}
+                </label>
+              </Flex>
+              <Button type="submit" disabled={authMutation.isPending}>
+                {authMutation.isPending ? 'Working...' : mode === 'login' ? 'Sign in' : 'Register'}
+              </Button>
+            </Flex>
+          </form>
+        </Card>
+        <Flex mt="3" direction="column" gap="2">
+          <Button type="button" variant="ghost" onClick={toggleMode} style={{ justifyContent: 'flex-start' }}>
+            {mode === 'login' ? 'Need an account?' : 'Already registered?'}
+          </Button>
+          <Text aria-live="polite" as="p" color="gray" size="2">
+            {message}
+          </Text>
+        </Flex>
+      </main>
+    </Box>
   )
 }

@@ -5,8 +5,7 @@ test('a viewer can read but cannot modify a task', async ({ page }) => {
   await signIn(page, DEMO_VIEWER_EMAIL, DEMO_PASSWORD)
   await page.goto('/dashboard')
 
-  const projectItem = page.locator('.project-list li', { hasText: 'Demo Project' })
-  await projectItem.getByRole('link', { name: 'Open task board' }).click()
+  await page.getByRole('link', { name: 'Open task board for Demo Project' }).click()
   await page.waitForURL(/\/projects\/.+\/tasks/)
 
   const taskButton = page.getByRole('button', { name: /Review the task board/ })

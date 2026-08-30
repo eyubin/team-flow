@@ -3,6 +3,8 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Box, Button, Callout, Card, Flex, Heading, Link, Select, Text, TextField } from '@radix-ui/themes'
+import { InfoCircledIcon } from '@radix-ui/react-icons'
 import { isForbidden, request } from '../lib/api.ts'
 import { Forbidden } from '../components/Forbidden.tsx'
 
@@ -19,13 +21,6 @@ type Project = {
   description?: string
 }
 
-type Member = {
-  userId: string
-  email: string
-  displayName: string
-  role: 'ADMIN' | 'MEMBER' | 'VIEWER'
-}
-
 const workspaceSchema = z.object({
   name: z.string().min(1, 'Name is required').max(120),
 })
@@ -34,14 +29,8 @@ const projectSchema = z.object({
   name: z.string().min(1, 'Name is required').max(120),
 })
 
-const memberSchema = z.object({
-  email: z.string().min(1, 'Email is required').max(320).email('Enter a valid email address'),
-  role: z.enum(['MEMBER', 'VIEWER', 'ADMIN']),
-})
-
 type WorkspaceValues = z.infer<typeof workspaceSchema>
 type ProjectValues = z.infer<typeof projectSchema>
-type MemberValues = z.infer<typeof memberSchema>
 
 async function fetchWorkspaces() {
   await request('/api/auth/csrf')
@@ -67,22 +56,16 @@ export function DashboardPage() {
   })
   const projects = projectsQuery.data ?? []
 
-  const membersQuery = useQuery({
-    queryKey: ['workspaces', activeWorkspace, 'members'],
-    queryFn: () => request(`/api/workspaces/${activeWorkspace}/members`) as Promise<Member[]>,
-    enabled: !!activeWorkspace,
-  })
-  const members = membersQuery.data ?? []
-
   const workspaceForm = useForm<WorkspaceValues>({ resolver: zodResolver(workspaceSchema), defaultValues: { name: '' } })
   const projectForm = useForm<ProjectValues>({ resolver: zodResolver(projectSchema), defaultValues: { name: '' } })
-  const memberForm = useForm<MemberValues>({ resolver: zodResolver(memberSchema), defaultValues: { email: '', role: 'MEMBER' } })
 
   const createWorkspaceMutation = useMutation({
-    mutationFn: (values: WorkspaceValues) => request('/api/workspaces', { method: 'POST', body: JSON.stringify(values) }),
-    onSuccess: () => {
+    mutationFn: (values: WorkspaceValues) =>
+      request('/api/workspaces', { method: 'POST', body: JSON.stringify(values) }) as Promise<Workspace>,
+    onSuccess: (workspace) => {
       workspaceForm.reset()
       void queryClient.invalidateQueries({ queryKey: ['workspaces'] })
+      setSelectedWorkspace(workspace.id)
       setMessage('Workspace created')
     },
     onError: (error: unknown) => {
@@ -105,160 +88,183 @@ export function DashboardPage() {
     },
   })
 
-  const addMemberMutation = useMutation({
-    mutationFn: (values: MemberValues) =>
-      request(`/api/workspaces/${activeWorkspace}/members`, { method: 'POST', body: JSON.stringify(values) }),
-    onSuccess: () => {
-      memberForm.reset()
-      void queryClient.invalidateQueries({ queryKey: ['workspaces', activeWorkspace, 'members'] })
-      setMessage('Member added')
-    },
-    onError: (error: unknown) => {
-      if (isForbidden(error)) setActionForbidden(true)
-      setMessage(error instanceof Error ? error.message : 'Unable to add member')
-    },
-  })
-
-  const changeRoleMutation = useMutation({
-    mutationFn: ({ member, role }: { member: Member; role: Member['role'] }) =>
-      request(`/api/workspaces/${activeWorkspace}/members/${member.userId}`, { method: 'PATCH', body: JSON.stringify({ role }) }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['workspaces', activeWorkspace, 'members'] })
-      setMessage('Member role updated')
-    },
-    onError: (error: unknown) => {
-      if (isForbidden(error)) setActionForbidden(true)
-      setMessage(error instanceof Error ? error.message : 'Unable to update role')
-    },
-  })
-
-  const removeMemberMutation = useMutation({
-    mutationFn: (member: Member) =>
-      request(`/api/workspaces/${activeWorkspace}/members/${member.userId}`, { method: 'DELETE' }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['workspaces', activeWorkspace, 'members'] })
-      setMessage('Member removed')
-    },
-    onError: (error: unknown) => {
-      if (isForbidden(error)) setActionForbidden(true)
-      setMessage(error instanceof Error ? error.message : 'Unable to remove member')
-    },
-  })
-
-  function changeRole(member: Member, role: Member['role']) {
-    if (!activeWorkspace || role === member.role) return
-    setActionForbidden(false)
-    changeRoleMutation.mutate({ member, role })
-  }
-
-  function removeMember(member: Member) {
-    if (!activeWorkspace || !window.confirm(`Remove ${member.displayName}?`)) return
-    setActionForbidden(false)
-    removeMemberMutation.mutate(member)
-  }
-
   const loading = workspacesQuery.isLoading
-  const forbidden = isForbidden(workspacesQuery.error) || isForbidden(projectsQuery.error) || isForbidden(membersQuery.error)
+  const forbidden = isForbidden(workspacesQuery.error) || isForbidden(projectsQuery.error)
 
-  if (loading) return <main className="page"><p aria-live="polite">Loading dashboard...</p></main>
+  if (loading)
+    return (
+      <Box asChild>
+        <main>
+          <Text aria-live="polite">Loading dashboard...</Text>
+        </main>
+      </Box>
+    )
   if (forbidden) return <Forbidden message="You don't have access to this dashboard." />
 
-  const myRole = workspaces.find((workspace) => workspace.id === activeWorkspace)?.myRole
-
   return (
-    <main className="page dashboard-page">
-      <p className="eyebrow">TeamFlow workspace</p>
-      <h1>Project dashboard</h1>
-      <p className="lede">Create a workspace, then give it a project to hold future tasks.</p>
-      <form
-        onSubmit={workspaceForm.handleSubmit((values) => {
-          setActionForbidden(false)
-          createWorkspaceMutation.mutate(values)
-        })}
-        className="inline-form"
-        noValidate
-      >
-        <label>
-          New workspace
-          <input {...workspaceForm.register('name')} maxLength={120} aria-invalid={!!workspaceForm.formState.errors.name} />
-          {workspaceForm.formState.errors.name && <span role="alert" className="field-error">{workspaceForm.formState.errors.name.message}</span>}
-        </label>
-        <button type="submit" disabled={createWorkspaceMutation.isPending}>Create workspace</button>
-      </form>
-      {workspaces.length === 0 ? (
-        <p className="empty-state">No workspaces yet.</p>
-      ) : (
-        <>
-          <label>
-            Workspace
-            <select
-              aria-label="Workspace"
-              value={activeWorkspace}
-              onChange={(event) => setSelectedWorkspace(event.target.value)}
+    <Box asChild>
+      <main>
+        <Flex direction="column" gap="6">
+          <Flex direction="column" gap="3">
+            <Text size="1" color="iris" weight="bold" style={{ letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+              TeamFlow workspace
+            </Text>
+            <Heading as="h1" size="8">
+              Project dashboard
+            </Heading>
+            <Text as="p" color="gray">
+              Create a workspace, then give it a project to hold future tasks.
+            </Text>
+          </Flex>
+
+          <Card size="3">
+            <form
+              onSubmit={workspaceForm.handleSubmit((values) => {
+                setActionForbidden(false)
+                createWorkspaceMutation.mutate(values)
+              })}
+              noValidate
             >
-              {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name} ({workspace.myRole})</option>)}
-            </select>
-          </label>
-          <form
-            onSubmit={projectForm.handleSubmit((values) => {
-              setActionForbidden(false)
-              createProjectMutation.mutate(values)
-            })}
-            className="inline-form"
-            noValidate
-          >
-            <label>
-              New project
-              <input {...projectForm.register('name')} maxLength={120} aria-invalid={!!projectForm.formState.errors.name} />
-              {projectForm.formState.errors.name && <span role="alert" className="field-error">{projectForm.formState.errors.name.message}</span>}
-            </label>
-            <button type="submit" disabled={createProjectMutation.isPending}>Create project</button>
-          </form>
-          <section aria-labelledby="projects-heading">
-            <h2 id="projects-heading">Projects</h2>
-            {projects.length === 0 ? <p className="empty-state">No projects in this workspace yet.</p> : (
-              <ul className="project-list">
-                {projects.map((project) => <li key={project.id}><strong>{project.name}</strong><span>{project.description ?? 'Ready for tasks'}</span><a href={`/projects/${project.id}/tasks`}>Open task board</a></li>)}
-              </ul>
-            )}
-          </section>
-          <section aria-labelledby="members-heading" className="members-section">
-            <h2 id="members-heading">Members</h2>
-            {members.length === 0 ? <p className="empty-state">No members found.</p> : (
-              <ul className="member-list">
-                {members.map((member) => <li key={member.userId}><span><strong>{member.displayName}</strong><small>{member.email}</small></span>{myRole === 'ADMIN' ? <><select aria-label={`Role for ${member.displayName}`} value={member.role} onChange={(event) => changeRole(member, event.target.value as Member['role'])}><option value="ADMIN">Admin</option><option value="MEMBER">Member</option><option value="VIEWER">Viewer</option></select><button type="button" className="danger-button" onClick={() => removeMember(member)}>Remove</button></> : <span>{member.role}</span>}</li>)}
-              </ul>
-            )}
-            {myRole === 'ADMIN' && (
-              <form
-                onSubmit={memberForm.handleSubmit((values) => {
-                  setActionForbidden(false)
-                  addMemberMutation.mutate(values)
-                })}
-                className="inline-form"
-                noValidate
-              >
+              <Flex direction={{ initial: 'column', sm: 'row' }} align={{ initial: 'stretch', sm: 'end' }} gap="3" wrap="wrap">
+                <Flex asChild direction="column" gap="1" flexGrow="1" minWidth="12rem">
+                  <label>
+                    <Text weight="medium" size="2">
+                      New workspace
+                    </Text>
+                    <TextField.Root
+                      {...workspaceForm.register('name')}
+                      maxLength={120}
+                      aria-invalid={!!workspaceForm.formState.errors.name}
+                    />
+                    {workspaceForm.formState.errors.name && (
+                      <Text role="alert" color="red" size="1">
+                        {workspaceForm.formState.errors.name.message}
+                      </Text>
+                    )}
+                  </label>
+                </Flex>
+                <Button type="submit" disabled={createWorkspaceMutation.isPending}>
+                  Create workspace
+                </Button>
+              </Flex>
+            </form>
+          </Card>
+
+          {workspaces.length === 0 ? (
+            <Callout.Root color="gray">
+              <Callout.Icon>
+                <InfoCircledIcon />
+              </Callout.Icon>
+              <Callout.Text>No workspaces yet.</Callout.Text>
+            </Callout.Root>
+          ) : (
+            <>
+              <Flex asChild direction="column" gap="1" maxWidth="20rem">
                 <label>
-                  Email
-                  <input type="email" {...memberForm.register('email')} aria-invalid={!!memberForm.formState.errors.email} />
-                  {memberForm.formState.errors.email && <span role="alert" className="field-error">{memberForm.formState.errors.email.message}</span>}
+                  <Text weight="medium" size="2">
+                    Workspace
+                  </Text>
+                  <Select.Root value={activeWorkspace} onValueChange={setSelectedWorkspace}>
+                    <Select.Trigger aria-label="Workspace" />
+                    <Select.Content>
+                      {workspaces.map((workspace) => (
+                        <Select.Item key={workspace.id} value={workspace.id}>
+                          {workspace.name} ({workspace.myRole})
+                        </Select.Item>
+                      ))}
+                    </Select.Content>
+                  </Select.Root>
                 </label>
-                <label>
-                  Role
-                  <select aria-label="Role" {...memberForm.register('role')}>
-                    <option value="MEMBER">Member</option>
-                    <option value="VIEWER">Viewer</option>
-                    <option value="ADMIN">Admin</option>
-                  </select>
-                </label>
-                <button type="submit" disabled={addMemberMutation.isPending}>Add member</button>
-              </form>
-            )}
-          </section>
-        </>
-      )}
-      {actionForbidden && <p className="forbidden-state" role="alert">You don't have permission to do that. This action requires a higher role in this workspace.</p>}
-      <p aria-live="polite" className="form-message">{message}</p>
-    </main>
+              </Flex>
+
+              <Card size="3">
+                <form
+                  onSubmit={projectForm.handleSubmit((values) => {
+                    setActionForbidden(false)
+                    createProjectMutation.mutate(values)
+                  })}
+                  noValidate
+                >
+                  <Flex direction={{ initial: 'column', sm: 'row' }} align={{ initial: 'stretch', sm: 'end' }} gap="3" wrap="wrap">
+                    <Flex asChild direction="column" gap="1" flexGrow="1" minWidth="12rem">
+                      <label>
+                        <Text weight="medium" size="2">
+                          New project
+                        </Text>
+                        <TextField.Root
+                          {...projectForm.register('name')}
+                          maxLength={120}
+                          aria-invalid={!!projectForm.formState.errors.name}
+                        />
+                        {projectForm.formState.errors.name && (
+                          <Text role="alert" color="red" size="1">
+                            {projectForm.formState.errors.name.message}
+                          </Text>
+                        )}
+                      </label>
+                    </Flex>
+                    <Button type="submit" disabled={createProjectMutation.isPending}>
+                      Create project
+                    </Button>
+                  </Flex>
+                </form>
+              </Card>
+
+              <Flex direction="column" gap="3" asChild>
+                <section aria-labelledby="projects-heading">
+                  <Heading as="h2" size="5" id="projects-heading">
+                    Projects
+                  </Heading>
+                  {projects.length === 0 ? (
+                    <Callout.Root color="gray">
+                      <Callout.Icon>
+                        <InfoCircledIcon />
+                      </Callout.Icon>
+                      <Callout.Text>No projects in this workspace yet.</Callout.Text>
+                    </Callout.Root>
+                  ) : (
+                    <Flex direction="column" gap="3">
+                      {projects.map((project) => (
+                        <Card key={project.id}>
+                          <Flex justify="between" align="center" gap="3" wrap="wrap">
+                            <Flex direction="column">
+                              <Text weight="bold">{project.name}</Text>
+                              <Text color="gray" size="2">
+                                {project.description ?? 'Ready for tasks'}
+                              </Text>
+                            </Flex>
+                            <Link href={`/projects/${project.id}/tasks`} aria-label={`Open task board for ${project.name}`}>
+                              Open task board
+                            </Link>
+                          </Flex>
+                        </Card>
+                      ))}
+                    </Flex>
+                  )}
+                </section>
+              </Flex>
+
+              <Text as="p">
+                <Link href={`/workspaces/${activeWorkspace}/members`}>Manage members</Link>
+              </Text>
+            </>
+          )}
+
+          {actionForbidden && (
+            <Callout.Root color="red" role="alert">
+              <Callout.Icon>
+                <InfoCircledIcon />
+              </Callout.Icon>
+              <Callout.Text>
+                You don't have permission to do that. This action requires a higher role in this workspace.
+              </Callout.Text>
+            </Callout.Root>
+          )}
+          <Text aria-live="polite" color="gray" size="2">
+            {message}
+          </Text>
+        </Flex>
+      </main>
+    </Box>
   )
 }

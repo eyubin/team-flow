@@ -48,8 +48,7 @@ export async function createWorkspaceAndProject(page: Page, namePrefix: string) 
   await page.getByLabel('New project').fill(projectName)
   await page.getByRole('button', { name: 'Create project' }).click()
 
-  const projectItem = page.locator('.project-list li', { hasText: projectName })
-  await projectItem.getByRole('link', { name: 'Open task board' }).click()
+  await page.getByRole('link', { name: `Open task board for ${projectName}` }).click()
   await page.waitForURL(/\/projects\/.+\/tasks/)
 
   return { workspaceName, projectName, projectId: projectIdFromUrl(page.url()) }

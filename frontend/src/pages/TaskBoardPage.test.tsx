@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, cleanup } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
+import { Theme } from '@radix-ui/themes'
 import { createTestQueryClient } from '../test/queryClient.ts'
 import { TaskBoardPage } from './TaskBoardPage.tsx'
 
@@ -11,13 +12,15 @@ function response(body: unknown, ok = true, status = 200) {
 
 function renderBoard() {
   return render(
-    <QueryClientProvider client={createTestQueryClient()}>
-      <MemoryRouter initialEntries={['/projects/project-1/tasks']}>
-        <Routes>
-          <Route path="/projects/:projectId/tasks" element={<TaskBoardPage />} />
-        </Routes>
-      </MemoryRouter>
-    </QueryClientProvider>,
+    <Theme>
+      <QueryClientProvider client={createTestQueryClient()}>
+        <MemoryRouter initialEntries={['/projects/project-1/tasks']}>
+          <Routes>
+            <Route path="/projects/:projectId/tasks" element={<TaskBoardPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>
+    </Theme>,
   )
 }
 
@@ -59,7 +62,8 @@ describe('TaskBoardPage', () => {
 
     renderBoard()
     const statusFilter = await screen.findByLabelText('Filter status')
-    fireEvent.change(statusFilter, { target: { value: 'DONE' } })
+    fireEvent.click(statusFilter)
+    fireEvent.click(await screen.findByRole('option', { name: 'Done' }))
 
     await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes('status=DONE'))).toBe(true))
   })

@@ -1,12 +1,3 @@
-:root {
-  color-scheme: light dark;
-  font-family: "Segoe UI", system-ui, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-  color: #14213d;
-  background: #f4f1ea;
-}
-
 * {
   box-sizing: border-box;
 }
@@ -19,257 +10,51 @@ body {
   min-height: 100vh;
 }
 
-.page {
-  max-width: 40rem;
-  margin: 0 auto;
-  padding: 3rem 1.25rem;
+.app-header {
+  border-bottom: 1px solid var(--gray-a5);
+  background-color: var(--color-panel-translucent);
+  transition: transform 0.25s ease;
 }
 
-.auth-page {
-  max-width: 30rem;
+.app-header-hidden {
+  transform: translateY(-100%);
 }
 
-.eyebrow {
-  color: #b42318;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.app-header-inner {
+  padding-block: var(--space-3);
 }
 
-.auth-form {
-  display: grid;
-  gap: 1rem;
-  margin: 2rem 0 1rem;
+.brand-link {
+  color: var(--gray-12);
+  text-decoration: none;
 }
 
-.auth-form label {
-  display: grid;
-  gap: 0.35rem;
-  font-weight: 600;
+.brand-link:hover {
+  color: var(--accent-11);
 }
 
-.auth-form input {
-  border: 1px solid #9ba7b5;
-  border-radius: 0.35rem;
-  font: inherit;
-  padding: 0.7rem;
+.nav-link {
+  color: var(--gray-11);
+  text-decoration: none;
+  font-size: var(--font-size-2);
+  font-weight: 500;
+  padding-block: var(--space-1);
+  border-bottom: 2px solid transparent;
 }
 
-button {
-  background: #14213d;
-  border: 0;
-  border-radius: 0.35rem;
-  color: #fff;
-  cursor: pointer;
-  font: inherit;
-  font-weight: 700;
-  padding: 0.7rem 1rem;
+.nav-link:hover {
+  color: var(--gray-12);
 }
 
-button:disabled {
-  cursor: wait;
-  opacity: 0.65;
+.nav-link-active {
+  color: var(--accent-11);
+  border-bottom-color: var(--accent-9);
 }
 
-.link-button {
-  background: transparent;
-  color: #14213d;
-  padding-left: 0;
-  padding-right: 0;
-  text-decoration: underline;
-}
-
-.form-message {
-  min-height: 1.5rem;
-}
-
-.inline-form {
-  align-items: end;
-  display: flex;
-  gap: 0.75rem;
-  margin: 1.5rem 0;
-}
-
-.filter-form {
-  align-items: end;
-  border-bottom: 1px solid #c5cdd8;
-  display: flex;
-  gap: 0.75rem;
-  margin: 1.5rem 0;
-  padding-bottom: 1.5rem;
-}
-
-.filter-form label {
-  display: grid;
-  flex: 1;
-  gap: 0.35rem;
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-
-.inline-form label,
-.dashboard-page > label {
-  display: grid;
-  flex: 1;
-  gap: 0.35rem;
-  font-weight: 600;
-}
-
-select {
-  border: 1px solid #9ba7b5;
-  border-radius: 0.35rem;
-  font: inherit;
-  padding: 0.7rem;
-}
-
-.empty-state {
-  border-left: 3px solid #b42318;
-  padding: 0.75rem 1rem;
-}
-
-.project-list {
-  display: grid;
-  gap: 0.75rem;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.project-list li {
-  background: #fff;
-  border: 1px solid #c5cdd8;
-  border-radius: 0.35rem;
-  display: grid;
-  gap: 0.25rem;
-  padding: 1rem;
-}
-
-.task-select {
-  align-items: start;
-  background: transparent;
-  color: #14213d;
-  display: grid;
-  gap: 0.25rem;
-  padding: 0;
-  text-align: left;
-}
-
-.task-detail {
-  border-top: 2px solid #14213d;
-  margin-top: 2rem;
-  padding-top: 1.25rem;
-}
-
-.task-detail h3 {
-  margin-top: 1.5rem;
-}
-
-.detail-list {
-  display: grid;
-  gap: 0.5rem;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.detail-list li {
-  border-bottom: 1px solid #c5cdd8;
-  padding: 0.5rem 0;
-}
-
-.members-section {
-  border-top: 1px solid #c5cdd8;
-  margin-top: 2rem;
-  padding-top: 1rem;
-}
-
-.member-list {
-  display: grid;
-  gap: 0.5rem;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.member-list li {
-  align-items: center;
-  border-bottom: 1px solid #c5cdd8;
-  display: flex;
-  gap: 0.75rem;
-  justify-content: space-between;
-  padding: 0.65rem 0;
-}
-
-.member-list li > span:first-child {
-  display: grid;
-  gap: 0.1rem;
-  margin-right: auto;
-}
-
-.member-list small {
-  color: #3d4a5c;
-}
-
-.member-list select {
-  padding: 0.4rem;
-}
-
-.danger-button {
-  background: #b42318;
-  padding: 0.45rem 0.7rem;
-}
-
-.conflict-state,
-.forbidden-state {
-  background: #fff1f0;
-  border-left: 3px solid #b42318;
-  padding: 0.75rem 1rem;
-}
-
-.forbidden-page .lede {
-  border-left: 3px solid #b42318;
-  padding: 0.75rem 1rem;
-}
-
-.field-error {
-  color: #b42318;
-  font-size: 0.85rem;
-  font-weight: 400;
-}
-
-@media (max-width: 32rem) {
-  .inline-form,
-  .filter-form {
-    align-items: stretch;
-    flex-direction: column;
+/* Matches the Radix Themes `sm` breakpoint (768px) used for responsive
+   props elsewhere, so the header and form layouts adapt at the same width. */
+@media (max-width: 767px) {
+  .app-header-inner {
+    padding-block: var(--space-2);
   }
-}
-
-.lede {
-  color: #3d4a5c;
-}
-
-.health {
-  border: 1px solid #c5cdd8;
-  border-radius: 0.5rem;
-  padding: 1rem 1.25rem;
-  background: #fff;
-}
-
-.health-ok {
-  border-color: #2a7a4b;
-}
-
-.health-error {
-  border-color: #b42318;
-}
-
-.health-loading {
-  border-style: dashed;
-}
-
-h1,
-h2 {
-  line-height: 1.2;
 }

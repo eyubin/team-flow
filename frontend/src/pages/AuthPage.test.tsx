@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { QueryClientProvider } from '@tanstack/react-query'
+import { MemoryRouter } from 'react-router-dom'
 import { createTestQueryClient } from '../test/queryClient.ts'
 import { AuthPage } from './AuthPage.tsx'
 
@@ -10,9 +11,11 @@ function response(body: unknown, ok = true, status = 200) {
 
 function renderAuthPage() {
   return render(
-    <QueryClientProvider client={createTestQueryClient()}>
-      <AuthPage />
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <QueryClientProvider client={createTestQueryClient()}>
+        <AuthPage />
+      </QueryClientProvider>
+    </MemoryRouter>,
   )
 }
 
