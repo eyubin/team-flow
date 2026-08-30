@@ -155,7 +155,7 @@ Endpoint groups: `/api/auth`, `/api/workspaces` (+ members, + projects), `/api/p
 
 Every PR runs, via [`ci.yml`](.github/workflows/ci.yml): frontend lint/typecheck/unit/build, backend unit + integration tests (real Postgres via Testcontainers), a Compose smoke test with health checks, an OpenAPI contract check, the full Playwright E2E suite against the live stack, secret scanning, and container image scanning. [`codeql.yml`](.github/workflows/codeql.yml) runs SAST on push, PR, and weekly.
 
-There's no release/CD workflow yet — see Roadmap. Per the project's own convention, that workflow will be named `release`, not `CD`, until an actual deployment target exists.
+On top of that, [`release.yml`](.github/workflows/release.yml) runs after CI succeeds on `main`: it builds immutable backend/frontend images tagged with the commit SHA, publishes them to GHCR, runs Flyway as a one-off ECS task against the new image *before* touching the running service, then rolls out the ECS Fargate staging services and smoke-tests the result. It's called `release`, not `CD`, per the project's own convention — that name is earned by deploying somewhere real, which this now does. See [`infra/terraform/`](infra/terraform/) for the staging infrastructure and its one-time setup steps.
 
 ## Trade-offs and roadmap
 
@@ -163,8 +163,8 @@ Deliberately out of scope for this MVP: microservices, Kubernetes, a custom OAut
 
 What's genuinely still missing, in rough priority order:
 
-1. **GHCR release images and a staging deployment** — no public hosting target is selected yet, so there's no `release` workflow (publishing images with no target to deploy them to isn't real continuous delivery).
-2. **Login rate limiting** — explicitly deferred past the MVP per the project's own security checklist.
+1. **Login rate limiting** — explicitly deferred past the MVP per the project's own security checklist.
+2. **HTTPS/a custom domain for staging** — the ALB currently serves plain HTTP; no domain has been chosen yet. A production tier is out of scope entirely until there's a real one to protect with the plan's required manual-approval gate.
 
 One deliberate non-goal worth naming: `frontend/.trivyignore` currently suppresses 9 nginx CVEs in the base image whose fix Trivy's advisory data cites but Alpine hasn't published yet. Dependabot watches that Dockerfile, so the ignore entries should become removable, not permanent.
 
