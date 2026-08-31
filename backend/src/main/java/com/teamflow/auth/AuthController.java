@@ -46,7 +46,10 @@ public class AuthController {
     public ResponseEntity<Void> csrf(CsrfToken token) {
         // CsrfToken is resolved lazily; touching it here is what actually
         // generates the token and saves it to the XSRF-TOKEN cookie.
-        token.getToken();
+        if (token != null) {
+            token.getToken();
+        }
+      
         return ResponseEntity.noContent().build();
     }
 
