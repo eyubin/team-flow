@@ -35,10 +35,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: 21
+          java-version: 25
           cache: maven
           cache-dependency-path: backend/pom.xml
       - run: ./mvnw -B verify
@@ -49,10 +49,90 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
       - run: cp .env.example .env
       - run: docker compose --env-file .env -f infra/docker-compose.yml up --build -d --wait
       - run: curl -fsS http://localhost:8080/actuator/health | grep '"status":"UP"'
       - run: curl -fsS http://localhost:3000/actuator/health | grep '"status":"UP"'
       - run: curl -fsS http://localhost:3000/ | grep -q TeamFlow
+      - name: Validate OpenAPI contract
+        run: |
+          curl -fsS http://localhost:8080/v3/api-docs -o api-docs.json
+          jq -e '.openapi and .paths["/api/auth/login"] and .paths["/api/projects/{projectId}/tasks"] and .paths["/api/workspaces"]' api-docs.json > /dev/null
+      - name: E2E tests against the Compose stack
+        run: npx playwright test
+        working-directory: frontend
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 7
       - if: always()
         run: docker compose --env-file .env -f infra/docker-compose.yml down -v
+
+  secrets-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Gitleaks
+        run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest detect --source=/repo -v --redact --exit-code 1
+
+  container-scan:
+    needs: [frontend, backend]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t teamflow-backend:ci backend
+      - run: docker build -t teamflow-frontend:ci frontend
+
+      - name: Scan backend image for vulnerabilities
+        uses: aquasecurity/trivy-action@1f0aa582c8c8f5f7639610d6d38baddfea4fdcee # v0.9.2
+        with:
+          image-ref: teamflow-backend:ci
+          format: sarif
+          output: trivy-backend.sarif
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+          ignore-unfixed: true
+
+      - name: Scan frontend image for vulnerabilities
+        if: always()
+        uses: aquasecurity/trivy-action@1f0aa582c8c8f5f7639610d6d38baddfea4fdcee # v0.9.2
+        with:
+          image-ref: teamflow-frontend:ci
+          format: sarif
+          output: trivy-frontend.sarif
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+          ignore-unfixed: true
+          trivyignores: frontend/.trivyignore
+
+      - name: Upload backend scan results
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-backend.sarif
+          category: trivy-backend
+
+      - name: Upload frontend scan results
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-frontend.sarif
+          category: trivy-frontend

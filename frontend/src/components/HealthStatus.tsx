@@ -1,9 +1,16 @@
 import { useEffect, useState } from 'react'
+import { Badge, Card, Flex, Heading, Text } from '@radix-ui/themes'
 
 type HealthState = 'loading' | 'ok' | 'error'
 
 type HealthBody = {
   status?: string
+}
+
+const BADGE_BY_STATE: Record<HealthState, { color: 'gray' | 'green' | 'red'; label: string }> = {
+  loading: { color: 'gray', label: 'Checking' },
+  ok: { color: 'green', label: 'Healthy' },
+  error: { color: 'red', label: 'Unavailable' },
 }
 
 export function HealthStatus() {
@@ -40,10 +47,23 @@ export function HealthStatus() {
     return () => controller.abort()
   }, [])
 
+  const badge = BADGE_BY_STATE[state]
+
   return (
-    <section aria-live="polite" className={`health health-${state}`}>
-      <h2>API health</h2>
-      <p>{state === 'loading' ? 'Loading' : message}</p>
-    </section>
+    <Card asChild variant="surface">
+      <section aria-live="polite">
+        <Flex align="center" justify="between" gap="3" mb="2">
+          <Heading as="h2" size="4">
+            API health
+          </Heading>
+          <Badge color={badge.color} variant="soft">
+            {badge.label}
+          </Badge>
+        </Flex>
+        <Text as="p" color="gray">
+          {state === 'loading' ? 'Loading' : message}
+        </Text>
+      </section>
+    </Card>
   )
 }
