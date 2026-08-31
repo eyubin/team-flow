@@ -14,7 +14,7 @@ FROM base AS build
 COPY . .
 RUN npm run build
 
-FROM nginxinc/nginx-unprivileged:1.28-alpine AS runtime
+FROM nginxinc/nginx-unprivileged:1.31-alpine AS runtime
 USER root
 RUN apk upgrade --no-cache
 USER nginx
