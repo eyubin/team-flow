@@ -1,0 +1,11 @@
+# Copy to terraform.tfvars (never commit terraform.tfvars) and fill in.
+
+github_repo = "your-github-username/team-flow"
+ghcr_owner  = "your-github-username"
+
+# Leave empty (default) if the GHCR packages are public -- no AWS credentials
+# are then needed to pull images. Only set this if you deliberately keep the
+# packages private.
+# ghcr_pat = ""
+
+aws_region = "us-east-1"

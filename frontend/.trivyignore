@@ -1,0 +1,15 @@
+# nginx package fixes are not yet published in the Alpine 3.23 repos this
+# base image draws from (Trivy's advisory data cites the fix version, but
+# `apk upgrade` cannot install a package that doesn't exist yet). Tracked by
+# Dependabot's docker-ecosystem watch on frontend/Dockerfile; remove these
+# once nginx 1.28.3-r* (or newer) is available and `apk upgrade` picks it up.
+CVE-2026-42945
+CVE-2026-27651
+CVE-2026-27654
+CVE-2026-32647
+CVE-2026-42055
+CVE-2026-42533
+CVE-2026-42946
+CVE-2026-49975
+CVE-2026-60005
+CVE-2026-9256
