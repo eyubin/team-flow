@@ -8,6 +8,7 @@ import { AuthPage } from './pages/AuthPage.tsx'
 import { DashboardPage } from './pages/DashboardPage.tsx'
 import { MembersPage } from './pages/MembersPage.tsx'
 import { TaskBoardPage } from './pages/TaskBoardPage.tsx'
+import { NotFoundPage } from './pages/NotFoundPage.tsx'
 import { onUnauthorized } from './lib/api.ts'
 
 export default function App() {
@@ -33,6 +34,7 @@ export default function App() {
           <Route path="/workspaces/:workspaceId/members" element={<MembersPage />} />
           <Route path="/projects/:projectId/tasks" element={<TaskBoardPage />} />
         </Route>
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </AppShell>
   )

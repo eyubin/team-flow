@@ -3,10 +3,14 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link as RouterLink } from 'react-router-dom'
 import { Box, Button, Callout, Card, Flex, Heading, Link, Select, Text, TextField } from '@radix-ui/themes'
 import { InfoCircledIcon } from '@radix-ui/react-icons'
 import { isForbidden, request } from '../lib/api.ts'
 import { Forbidden } from '../components/Forbidden.tsx'
+import { QueryError } from '../components/QueryError.tsx'
+import { StatusMessage, type StatusMessageValue } from '../components/StatusMessage.tsx'
+import { useDocumentTitle } from '../lib/useDocumentTitle.ts'
 
 type Workspace = {
   id: string
@@ -38,8 +42,9 @@ async function fetchWorkspaces() {
 }
 
 export function DashboardPage() {
+  useDocumentTitle('Dashboard')
   const [selectedWorkspace, setSelectedWorkspace] = useState('')
-  const [message, setMessage] = useState('')
+  const [message, setMessage] = useState<StatusMessageValue>(null)
   const [actionForbidden, setActionForbidden] = useState(false)
   const queryClient = useQueryClient()
 
@@ -66,11 +71,11 @@ export function DashboardPage() {
       workspaceForm.reset()
       void queryClient.invalidateQueries({ queryKey: ['workspaces'] })
       setSelectedWorkspace(workspace.id)
-      setMessage('Workspace created')
+      setMessage({ text: 'Workspace created', tone: 'success' })
     },
     onError: (error: unknown) => {
       if (isForbidden(error)) setActionForbidden(true)
-      setMessage(error instanceof Error ? error.message : 'Unable to create workspace')
+      setMessage({ text: error instanceof Error ? error.message : 'Unable to create workspace', tone: 'error' })
     },
   })
 
@@ -80,16 +85,18 @@ export function DashboardPage() {
     onSuccess: () => {
       projectForm.reset()
       void queryClient.invalidateQueries({ queryKey: ['workspaces', activeWorkspace, 'projects'] })
-      setMessage('Project created')
+      setMessage({ text: 'Project created', tone: 'success' })
     },
     onError: (error: unknown) => {
       if (isForbidden(error)) setActionForbidden(true)
-      setMessage(error instanceof Error ? error.message : 'Unable to create project')
+      setMessage({ text: error instanceof Error ? error.message : 'Unable to create project', tone: 'error' })
     },
   })
 
   const loading = workspacesQuery.isLoading
   const forbidden = isForbidden(workspacesQuery.error) || isForbidden(projectsQuery.error)
+  const workspacesFailed = workspacesQuery.isError && !isForbidden(workspacesQuery.error)
+  const projectsFailed = projectsQuery.isError && !isForbidden(projectsQuery.error)
 
   if (loading)
     return (
@@ -100,6 +107,14 @@ export function DashboardPage() {
       </Box>
     )
   if (forbidden) return <Forbidden message="You don't have access to this dashboard." />
+  if (workspacesFailed)
+    return (
+      <Box asChild>
+        <main>
+          <QueryError message="We couldn't load your workspaces." onRetry={() => void workspacesQuery.refetch()} />
+        </main>
+      </Box>
+    )
 
   return (
     <Box asChild>
@@ -215,7 +230,9 @@ export function DashboardPage() {
                   <Heading as="h2" size="5" id="projects-heading">
                     Projects
                   </Heading>
-                  {projects.length === 0 ? (
+                  {projectsFailed ? (
+                    <QueryError message="We couldn't load projects for this workspace." onRetry={() => void projectsQuery.refetch()} />
+                  ) : projects.length === 0 ? (
                     <Callout.Root color="gray">
                       <Callout.Icon>
                         <InfoCircledIcon />
@@ -233,8 +250,10 @@ export function DashboardPage() {
                                 {project.description ?? 'Ready for tasks'}
                               </Text>
                             </Flex>
-                            <Link href={`/projects/${project.id}/tasks`} aria-label={`Open task board for ${project.name}`}>
-                              Open task board
+                            <Link asChild>
+                              <RouterLink to={`/projects/${project.id}/tasks`} aria-label={`Open task board for ${project.name}`}>
+                                Open task board
+                              </RouterLink>
                             </Link>
                           </Flex>
                         </Card>
@@ -245,7 +264,9 @@ export function DashboardPage() {
               </Flex>
 
               <Text as="p">
-                <Link href={`/workspaces/${activeWorkspace}/members`}>Manage members</Link>
+                <Link asChild>
+                  <RouterLink to={`/workspaces/${activeWorkspace}/members`}>Manage members</RouterLink>
+                </Link>
               </Text>
             </>
           )}
@@ -260,9 +281,7 @@ export function DashboardPage() {
               </Callout.Text>
             </Callout.Root>
           )}
-          <Text aria-live="polite" color="gray" size="2">
-            {message}
-          </Text>
+          <StatusMessage value={message} />
         </Flex>
       </main>
     </Box>
