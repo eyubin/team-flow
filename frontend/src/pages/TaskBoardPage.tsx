@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link as RouterLink, useParams } from 'react-router-dom'
 import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -22,6 +22,9 @@ import {
 import { ExclamationTriangleIcon, InfoCircledIcon } from '@radix-ui/react-icons'
 import { ApiError, isForbidden, request } from '../lib/api.ts'
 import { Forbidden } from '../components/Forbidden.tsx'
+import { QueryError } from '../components/QueryError.tsx'
+import { StatusMessage, type StatusMessageValue } from '../components/StatusMessage.tsx'
+import { useDocumentTitle } from '../lib/useDocumentTitle.ts'
 
 type Task = {
   id: string
@@ -69,12 +72,13 @@ function taskToFormValues(task: Task): TaskFormValues {
 
 export function TaskBoardPage() {
   const { projectId } = useParams<{ projectId: string }>()
+  useDocumentTitle('Task board')
   const queryClient = useQueryClient()
 
   const [filterStatus, setFilterStatus] = useState<Task['status'] | ''>('')
   const [filterPriority, setFilterPriority] = useState<Task['priority'] | ''>('')
   const [assigneeFilter, setAssigneeFilter] = useState('')
-  const [message, setMessage] = useState('')
+  const [message, setMessage] = useState<StatusMessageValue>(null)
   const [actionForbidden, setActionForbidden] = useState(false)
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [hasConflict, setHasConflict] = useState(false)
@@ -119,11 +123,11 @@ export function TaskBoardPage() {
     onSuccess: () => {
       createForm.reset()
       void queryClient.invalidateQueries({ queryKey: ['tasks', projectId] })
-      setMessage('Task created')
+      setMessage({ text: 'Task created', tone: 'success' })
     },
     onError: (error: unknown) => {
       if (isForbidden(error)) setActionForbidden(true)
-      setMessage(error instanceof Error ? error.message : 'Unable to create task')
+      setMessage({ text: error instanceof Error ? error.message : 'Unable to create task', tone: 'error' })
     },
   })
 
@@ -137,14 +141,17 @@ export function TaskBoardPage() {
       queryClient.setQueriesData<TaskPage>({ queryKey: ['tasks', projectId] }, (old) =>
         old ? { ...old, content: old.content.map((task) => (task.id === updated.id ? updated : task)) } : old)
       setHasConflict(false)
-      setMessage('Task updated')
+      setMessage({ text: 'Task updated', tone: 'success' })
     },
     onError: (error: unknown) => {
       if (error instanceof ApiError && error.status === 409) setHasConflict(true)
       if (isForbidden(error)) setActionForbidden(true)
-      setMessage(error instanceof ApiError && error.status === 409
-        ? 'Conflict: this task changed elsewhere. Reload the task before saving again.'
-        : error instanceof Error ? error.message : 'Unable to update task')
+      setMessage({
+        text: error instanceof ApiError && error.status === 409
+          ? 'Conflict: this task changed elsewhere. Reload the task before saving again.'
+          : error instanceof Error ? error.message : 'Unable to update task',
+        tone: 'error',
+      })
     },
   })
 
@@ -154,11 +161,11 @@ export function TaskBoardPage() {
       queryClient.setQueriesData<TaskPage>({ queryKey: ['tasks', projectId] }, (old) =>
         old ? { ...old, content: old.content.filter((task) => task.id !== selectedTask!.id) } : old)
       setSelectedTaskId(null)
-      setMessage('Task deleted')
+      setMessage({ text: 'Task deleted', tone: 'success' })
     },
     onError: (error: unknown) => {
       if (isForbidden(error)) setActionForbidden(true)
-      setMessage(error instanceof Error ? error.message : 'Unable to delete task')
+      setMessage({ text: error instanceof Error ? error.message : 'Unable to delete task', tone: 'error' })
     },
   })
 
@@ -168,11 +175,11 @@ export function TaskBoardPage() {
     onSuccess: (comment) => {
       queryClient.setQueryData<Comment[]>(['tasks', selectedTaskId, 'comments'], (old) => [comment, ...(old ?? [])])
       commentForm.reset()
-      setMessage('Comment added')
+      setMessage({ text: 'Comment added', tone: 'success' })
     },
     onError: (error: unknown) => {
       if (isForbidden(error)) setActionForbidden(true)
-      setMessage(error instanceof Error ? error.message : 'Unable to add comment')
+      setMessage({ text: error instanceof Error ? error.message : 'Unable to add comment', tone: 'error' })
     },
   })
 
@@ -193,9 +200,9 @@ export function TaskBoardPage() {
       setHasConflict(false)
       void queryClient.invalidateQueries({ queryKey: ['tasks', fresh.id, 'comments'] })
       void queryClient.invalidateQueries({ queryKey: ['audit-events', fresh.id] })
-      setMessage('Task reloaded')
+      setMessage({ text: 'Task reloaded', tone: 'success' })
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Unable to reload task')
+      setMessage({ text: error instanceof Error ? error.message : 'Unable to reload task', tone: 'error' })
     }
   }
 
@@ -207,6 +214,7 @@ export function TaskBoardPage() {
 
   const loading = tasksQuery.isLoading
   const forbidden = isForbidden(tasksQuery.error)
+  const failed = tasksQuery.isError && !isForbidden(tasksQuery.error)
 
   if (loading)
     return (
@@ -217,6 +225,14 @@ export function TaskBoardPage() {
       </Box>
     )
   if (forbidden) return <Forbidden message="You don't have access to this project's task board." />
+  if (failed)
+    return (
+      <Box asChild>
+        <main>
+          <QueryError message="We couldn't load this project's tasks." onRetry={() => void tasksQuery.refetch()} />
+        </main>
+      </Box>
+    )
 
   return (
     <Box asChild>
@@ -535,7 +551,11 @@ export function TaskBoardPage() {
                       </Button>
                     </Flex>
                   </form>
-                  {comments.length === 0 ? (
+                  {commentsQuery.isLoading ? (
+                    <Text as="p" size="2" color="gray" aria-live="polite">
+                      Loading comments...
+                    </Text>
+                  ) : comments.length === 0 ? (
                     <Callout.Root color="gray" size="1">
                       <Callout.Text>No comments yet.</Callout.Text>
                     </Callout.Root>
@@ -556,7 +576,11 @@ export function TaskBoardPage() {
                   <Heading as="h3" size="4">
                     History
                   </Heading>
-                  {auditEvents.length === 0 ? (
+                  {auditQuery.isLoading ? (
+                    <Text as="p" size="2" color="gray" aria-live="polite">
+                      Loading history...
+                    </Text>
+                  ) : auditEvents.length === 0 ? (
                     <Callout.Root color="gray" size="1">
                       <Callout.Text>No history yet.</Callout.Text>
                     </Callout.Root>
@@ -582,11 +606,11 @@ export function TaskBoardPage() {
               <Callout.Text>You don't have permission to do that. Your role in this project is read-only.</Callout.Text>
             </Callout.Root>
           )}
-          <Text aria-live="polite" color="gray" size="2">
-            {message}
-          </Text>
+          <StatusMessage value={message} />
           <Text as="p">
-            <Link href="/dashboard">Back to dashboard</Link>
+            <Link asChild>
+              <RouterLink to="/dashboard">Back to dashboard</RouterLink>
+            </Link>
           </Text>
         </Flex>
 

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link as RouterLink, useParams } from 'react-router-dom'
 import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -22,6 +22,9 @@ import {
 import { InfoCircledIcon } from '@radix-ui/react-icons'
 import { isForbidden, request } from '../lib/api.ts'
 import { Forbidden } from '../components/Forbidden.tsx'
+import { QueryError } from '../components/QueryError.tsx'
+import { StatusMessage, type StatusMessageValue } from '../components/StatusMessage.tsx'
+import { useDocumentTitle } from '../lib/useDocumentTitle.ts'
 
 type Workspace = {
   id: string
@@ -56,7 +59,8 @@ async function fetchWorkspaces() {
 
 export function MembersPage() {
   const { workspaceId } = useParams<{ workspaceId: string }>()
-  const [message, setMessage] = useState('')
+  useDocumentTitle('Members')
+  const [message, setMessage] = useState<StatusMessageValue>(null)
   const [actionForbidden, setActionForbidden] = useState(false)
   const [memberPendingRemoval, setMemberPendingRemoval] = useState<Member | null>(null)
   const queryClient = useQueryClient()
@@ -79,11 +83,11 @@ export function MembersPage() {
     onSuccess: () => {
       memberForm.reset()
       void queryClient.invalidateQueries({ queryKey: ['workspaces', workspaceId, 'members'] })
-      setMessage('Member added')
+      setMessage({ text: 'Member added', tone: 'success' })
     },
     onError: (error: unknown) => {
       if (isForbidden(error)) setActionForbidden(true)
-      setMessage(error instanceof Error ? error.message : 'Unable to add member')
+      setMessage({ text: error instanceof Error ? error.message : 'Unable to add member', tone: 'error' })
     },
   })
 
@@ -92,11 +96,11 @@ export function MembersPage() {
       request(`/api/workspaces/${workspaceId}/members/${member.userId}`, { method: 'PATCH', body: JSON.stringify({ role }) }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['workspaces', workspaceId, 'members'] })
-      setMessage('Member role updated')
+      setMessage({ text: 'Member role updated', tone: 'success' })
     },
     onError: (error: unknown) => {
       if (isForbidden(error)) setActionForbidden(true)
-      setMessage(error instanceof Error ? error.message : 'Unable to update role')
+      setMessage({ text: error instanceof Error ? error.message : 'Unable to update role', tone: 'error' })
     },
   })
 
@@ -105,11 +109,11 @@ export function MembersPage() {
       request(`/api/workspaces/${workspaceId}/members/${member.userId}`, { method: 'DELETE' }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['workspaces', workspaceId, 'members'] })
-      setMessage('Member removed')
+      setMessage({ text: 'Member removed', tone: 'success' })
     },
     onError: (error: unknown) => {
       if (isForbidden(error)) setActionForbidden(true)
-      setMessage(error instanceof Error ? error.message : 'Unable to remove member')
+      setMessage({ text: error instanceof Error ? error.message : 'Unable to remove member', tone: 'error' })
     },
   })
 
@@ -128,6 +132,8 @@ export function MembersPage() {
 
   const loading = workspacesQuery.isLoading || membersQuery.isLoading
   const forbidden = isForbidden(workspacesQuery.error) || isForbidden(membersQuery.error)
+  const failed = (workspacesQuery.isError && !isForbidden(workspacesQuery.error)) ||
+    (membersQuery.isError && !isForbidden(membersQuery.error))
 
   if (loading)
     return (
@@ -138,6 +144,20 @@ export function MembersPage() {
       </Box>
     )
   if (forbidden) return <Forbidden message="You don't have access to this workspace's members." />
+  if (failed)
+    return (
+      <Box asChild>
+        <main>
+          <QueryError
+            message="We couldn't load this workspace's members."
+            onRetry={() => {
+              void workspacesQuery.refetch()
+              void membersQuery.refetch()
+            }}
+          />
+        </main>
+      </Box>
+    )
 
   const myRole = workspace?.myRole
 
@@ -293,11 +313,11 @@ export function MembersPage() {
               </Callout.Text>
             </Callout.Root>
           )}
-          <Text aria-live="polite" color="gray" size="2">
-            {message}
-          </Text>
+          <StatusMessage value={message} />
           <Text as="p">
-            <Link href="/dashboard">Back to dashboard</Link>
+            <Link asChild>
+              <RouterLink to="/dashboard">Back to dashboard</RouterLink>
+            </Link>
           </Text>
         </Flex>
 

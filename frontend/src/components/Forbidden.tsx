@@ -1,11 +1,14 @@
+import { Link as RouterLink } from 'react-router-dom'
 import { LockClosedIcon } from '@radix-ui/react-icons'
 import { Box, Callout, Flex, Heading, Link, Text } from '@radix-ui/themes'
+import { useDocumentTitle } from '../lib/useDocumentTitle.ts'
 
 type ForbiddenProps = {
   message?: string
 }
 
 export function Forbidden({ message }: ForbiddenProps) {
+  useDocumentTitle('Access denied')
   return (
     <Box asChild maxWidth="30rem">
       <main>
@@ -25,7 +28,9 @@ export function Forbidden({ message }: ForbiddenProps) {
             </Callout.Text>
           </Callout.Root>
           <Text as="p">
-            <Link href="/dashboard">Back to dashboard</Link>
+            <Link asChild>
+              <RouterLink to="/dashboard">Back to dashboard</RouterLink>
+            </Link>
           </Text>
         </Flex>
       </main>

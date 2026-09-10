@@ -4,9 +4,12 @@ import type { Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
-import { Box, Button, Card, Flex, Heading, Link, Text, TextField } from '@radix-ui/themes'
+import { Link as RouterLink, useNavigate } from 'react-router-dom'
+import { Box, Button, Card, Flex, Heading, IconButton, Link, Text, TextField } from '@radix-ui/themes'
+import { EyeClosedIcon, EyeOpenIcon } from '@radix-ui/react-icons'
 import { useProfile, type Profile } from '../lib/auth.ts'
+import { StatusMessage, type StatusMessageValue } from '../components/StatusMessage.tsx'
+import { useDocumentTitle } from '../lib/useDocumentTitle.ts'
 
 const csrfCookie = 'XSRF-TOKEN'
 
@@ -57,7 +60,8 @@ async function signOut() {
 
 export function AuthPage() {
   const [mode, setMode] = useState<Mode>('login')
-  const [message, setMessage] = useState('')
+  const [message, setMessage] = useState<StatusMessageValue>(null)
+  const [showPassword, setShowPassword] = useState(false)
   const queryClient = useQueryClient()
   const navigate = useNavigate()
 
@@ -77,11 +81,11 @@ export function AuthPage() {
     mutationFn: (values: LoginValues | RegisterValues) => authenticate(mode, values),
     onSuccess: (profile) => {
       queryClient.setQueryData(['auth', 'me'], profile)
-      setMessage('Signed in')
+      setMessage({ text: 'Signed in', tone: 'success' })
       navigate('/dashboard')
     },
     onError: (error: unknown) => {
-      setMessage(error instanceof Error ? error.message : 'Request failed')
+      setMessage({ text: error instanceof Error ? error.message : 'Request failed', tone: 'error' })
     },
   })
 
@@ -89,21 +93,23 @@ export function AuthPage() {
     mutationFn: signOut,
     onSuccess: () => {
       queryClient.setQueryData(['auth', 'me'], null)
-      setMessage('Signed out')
+      setMessage({ text: 'Signed out', tone: 'success' })
     },
   })
 
   function onSubmit(values: RegisterValues) {
-    setMessage('')
+    setMessage(null)
     authMutation.mutate(mode === 'register' ? values : { email: values.email, password: values.password })
   }
 
   function toggleMode() {
     setMode((current) => (current === 'login' ? 'register' : 'login'))
+    setShowPassword(false)
     reset()
   }
 
   const profile = profileQuery.data
+  useDocumentTitle(profile ? 'Account' : mode === 'login' ? 'Sign in' : 'Create account')
 
   if (profile) {
     return (
@@ -124,11 +130,11 @@ export function AuthPage() {
                 <Button type="button" variant="soft" color="gray" onClick={() => logoutMutation.mutate()} disabled={logoutMutation.isPending}>
                   Sign out
                 </Button>
-                <Link href="/dashboard">Open dashboard</Link>
+                <Link asChild>
+                  <RouterLink to="/dashboard">Open dashboard</RouterLink>
+                </Link>
               </Flex>
-              <Text aria-live="polite" as="p" color="gray" size="2">
-                {message}
-              </Text>
+              <StatusMessage value={message} />
             </Flex>
           </main>
         </Box>
@@ -160,7 +166,12 @@ export function AuthPage() {
                       <Text weight="medium" size="2">
                         Display name
                       </Text>
-                      <TextField.Root {...register('displayName')} maxLength={80} aria-invalid={!!errors.displayName} />
+                      <TextField.Root
+                        {...register('displayName')}
+                        maxLength={80}
+                        autoComplete="name"
+                        aria-invalid={!!errors.displayName}
+                      />
                       {errors.displayName && (
                         <Text role="alert" color="red" size="1">
                           {errors.displayName.message}
@@ -174,7 +185,13 @@ export function AuthPage() {
                     <Text weight="medium" size="2">
                       Email
                     </Text>
-                    <TextField.Root type="email" {...register('email')} maxLength={320} aria-invalid={!!errors.email} />
+                    <TextField.Root
+                      type="email"
+                      {...register('email')}
+                      maxLength={320}
+                      autoComplete="email"
+                      aria-invalid={!!errors.email}
+                    />
                     {errors.email && (
                       <Text role="alert" color="red" size="1">
                         {errors.email.message}
@@ -187,7 +204,26 @@ export function AuthPage() {
                     <Text weight="medium" size="2">
                       Password
                     </Text>
-                    <TextField.Root type="password" {...register('password')} maxLength={128} aria-invalid={!!errors.password} />
+                    <TextField.Root
+                      type={showPassword ? 'text' : 'password'}
+                      {...register('password')}
+                      maxLength={128}
+                      autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                      aria-invalid={!!errors.password}
+                    >
+                      <TextField.Slot side="right">
+                        <IconButton
+                          type="button"
+                          variant="ghost"
+                          color="gray"
+                          size="1"
+                          aria-label={showPassword ? 'Hide password' : 'Show password'}
+                          onClick={() => setShowPassword((current) => !current)}
+                        >
+                          {showPassword ? <EyeClosedIcon /> : <EyeOpenIcon />}
+                        </IconButton>
+                      </TextField.Slot>
+                    </TextField.Root>
                     {errors.password && (
                       <Text role="alert" color="red" size="1">
                         {errors.password.message}
@@ -205,9 +241,7 @@ export function AuthPage() {
             <Button type="button" variant="ghost" onClick={toggleMode} style={{ justifyContent: 'flex-start' }}>
               {mode === 'login' ? 'Need an account?' : 'Already registered?'}
             </Button>
-            <Text aria-live="polite" as="p" color="gray" size="2">
-              {message}
-            </Text>
+            <StatusMessage value={message} />
           </Flex>
         </main>
       </Box>

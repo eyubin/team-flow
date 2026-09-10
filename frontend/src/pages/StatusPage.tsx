@@ -1,7 +1,10 @@
+import { Link as RouterLink } from 'react-router-dom'
 import { Box, Flex, Heading, Link, Text } from '@radix-ui/themes'
 import { HealthStatus } from '../components/HealthStatus.tsx'
+import { useDocumentTitle } from '../lib/useDocumentTitle.ts'
 
 export function StatusPage() {
+  useDocumentTitle('Status')
   return (
     <Box asChild maxWidth="34rem">
       <main>
@@ -14,7 +17,9 @@ export function StatusPage() {
           </Text>
           <HealthStatus />
           <Text as="p">
-            <Link href="/auth">Open account flow</Link>
+            <Link asChild>
+              <RouterLink to="/">Open account flow</RouterLink>
+            </Link>
           </Text>
         </Flex>
       </main>
