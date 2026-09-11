@@ -1,12 +1,19 @@
 # syntax=docker/dockerfile:1
 
+# Placeholder for the Maven cache. Overridden locally with
+# `--build-context m2=$HOME/.m2` to seed the build from a warm host cache;
+# empty by default, so a plain build still resolves from Maven Central.
+FROM scratch AS m2
+
 FROM eclipse-temurin:25-jdk-jammy AS build
 WORKDIR /src
 COPY mvnw pom.xml ./
 COPY .mvn .mvn
-RUN chmod +x mvnw && ./mvnw -q -B dependency:go-offline
+RUN --mount=type=cache,target=/root/.m2,from=m2,source=/,sharing=locked \
+    chmod +x mvnw && ./mvnw -q -B dependency:go-offline
 COPY src src
-RUN ./mvnw -q -B -DskipTests package && \
+RUN --mount=type=cache,target=/root/.m2,from=m2,source=/,sharing=locked \
+    ./mvnw -q -B -DskipTests package && \
     mv target/backend-*.jar /tmp/app.jar
 
 FROM eclipse-temurin:25-jre-jammy AS runtime

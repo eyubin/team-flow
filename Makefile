@@ -1,4 +1,9 @@
-COMPOSE := docker compose --env-file .env -f infra/docker-compose.yml
+# Seed the backend image build from the host Maven cache when one exists, so a
+# cold container does not have to re-resolve every dependency from Maven Central.
+MAVEN_CACHE := $(wildcard $(HOME)/.m2/repository)
+LOCAL_CACHE := $(if $(MAVEN_CACHE),-f infra/docker-compose.localcache.yml,)
+
+COMPOSE := docker compose --env-file .env -f infra/docker-compose.yml $(LOCAL_CACHE)
 COMPOSE_DEV := $(COMPOSE) -f infra/docker-compose.dev.yml
 
 .PHONY: help env up dev down logs ps test backend-test frontend-test frontend-install e2e
