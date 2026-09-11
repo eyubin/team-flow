@@ -1,0 +1,8 @@
+# Local-only overlay: seeds the backend image build from the host Maven cache
+# at $HOME/.m2 instead of resolving everything from Maven Central.
+# The Makefile includes this automatically when that cache exists.
+services:
+  backend:
+    build:
+      additional_contexts:
+        m2: ${HOME}/.m2
