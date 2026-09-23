@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles'
+import { ThemeProvider as MuiThemeProvider, StyledEngineProvider } from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
 import { createAppTheme } from '../../theme/muiTheme.ts'
 import { ThemeContext } from './theme-context.ts'
@@ -41,10 +41,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   return (
     <ThemeContext.Provider value={value}>
-      <MuiThemeProvider theme={muiTheme}>
-        <CssBaseline />
-        {children}
-      </MuiThemeProvider>
+      {/* Puts Emotion's output in the `mui` cascade layer declared in index.css,
+          below Tailwind's utilities. */}
+      <StyledEngineProvider enableCssLayer>
+        <MuiThemeProvider theme={muiTheme}>
+          <CssBaseline />
+          {children}
+        </MuiThemeProvider>
+      </StyledEngineProvider>
     </ThemeContext.Provider>
   )
 }

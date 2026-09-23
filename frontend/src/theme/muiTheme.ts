@@ -35,6 +35,10 @@ export function createAppTheme(appearance: ResolvedAppearance): Theme {
   const slate = SLATE[appearance]
 
   return createTheme({
+    // Emits the palette as `--mui-*` custom properties on :root, which is what
+    // Tailwind's colour tokens in index.css point at - so a utility class
+    // follows the dark-mode toggle without a second copy of these values.
+    cssVariables: true,
     palette: {
       mode: appearance,
       primary: { main: iris.solid, dark: iris.hover, light: iris.subtle, contrastText: '#ffffff' },

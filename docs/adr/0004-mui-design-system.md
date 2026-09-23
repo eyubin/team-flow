@@ -1,6 +1,6 @@
 # ADR 0004: MUI as the frontend design system
 
-- Status: Accepted
+- Status: Accepted, amended by [ADR 0005](0005-tailwind-utilities.md) (Tailwind utilities)
 - Date: 2026-09-23
 
 ## Context

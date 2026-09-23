@@ -115,7 +115,7 @@ The backend is organized by business capability (`auth`, `workspace`, `task`, `a
 
 | Layer | Stack | Why |
 | --- | --- | --- |
-| Frontend | React 19, TypeScript, Vite, React Router, MUI + MUI X DataGrid, TanStack Query/Table/Form/Virtual, Zod | Server state and caching handled by Query instead of hand-rolled `useState`/`fetch`; forms get schema-validated, typed submission with inline error messages instead of relying on native HTML validation; MUI supplies one component vocabulary and the light/dark theme ([ADR 0004](docs/adr/0004-mui-design-system.md)) |
+| Frontend | React 19, TypeScript, Vite, React Router, MUI + MUI X DataGrid, Tailwind CSS, TanStack Query/Table/Form/Virtual, Zod | Server state and caching handled by Query instead of hand-rolled `useState`/`fetch`; forms get schema-validated, typed submission with inline error messages instead of relying on native HTML validation; MUI supplies one component vocabulary and the light/dark theme ([ADR 0004](docs/adr/0004-mui-design-system.md)), with Tailwind utilities for layout reading the same palette ([ADR 0005](docs/adr/0005-tailwind-utilities.md)) |
 | Frontend tests | Vitest, React Testing Library, Playwright | Component tests close to the code, E2E against the real Compose stack (no mocking) |
 | Backend | Java 25, Spring Boot 4, Spring Security, Spring Data JPA | Mainstream, well-documented, matches what most teams actually run |
 | Database | PostgreSQL 16, Flyway | Real constraints and indexes in CI via Testcontainers, not H2 |
