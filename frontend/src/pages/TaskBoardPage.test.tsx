@@ -71,6 +71,17 @@ describe('TaskBoardPage', () => {
     })
   })
 
+  it('renders every row for a short board', async () => {
+    const many = Array.from({ length: 12 }, (_, index) => ({ ...task, id: `task-${index}`, title: `Task ${index}` }))
+    server.use(withTasks(...many))
+
+    renderBoard()
+
+    await screen.findByText('Task 0')
+    // One header row plus every task row: no windowing below the threshold.
+    expect(screen.getAllByRole('row')).toHaveLength(many.length + 1)
+  })
+
   it('shows a forbidden page when the project cannot be accessed', async () => {
     server.use(http.get('/api/projects/:projectId/tasks', () => problem(403, 'Not a member of this project')))
 

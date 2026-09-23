@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { Link as RouterLink, useParams } from 'react-router-dom'
 import { useForm } from '@tanstack/react-form'
 import { z } from 'zod'
@@ -14,6 +14,7 @@ import {
   useTable,
   type SortingState,
 } from '@tanstack/react-table'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -80,6 +81,12 @@ const taskTableFeatures = tableFeatures({
 })
 
 const columnHelper = createColumnHelper<typeof taskTableFeatures, Task>()
+
+// Long boards get virtualised rows; short ones render plainly, so the common
+// case carries no scroll container and no windowing maths.
+const VIRTUALIZE_ABOVE = 30
+const ROW_HEIGHT = 53
+const VIRTUAL_VIEWPORT = '32rem'
 
 // Stable identity: useForm re-applies its options on every render, so a fresh
 // object literal here would push these defaults back over a reset().
@@ -402,6 +409,25 @@ export function TaskBoardPage() {
     onSortingChange: setSorting,
   })
 
+  const rows = table.getRowModel().rows
+  const virtualize = rows.length > VIRTUALIZE_ABOVE
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 10,
+    enabled: virtualize,
+    // Gives the window a sane size before the scroll element is measured, so
+    // the first paint (and any non-layout environment) renders rows rather
+    // than nothing. Real measurements take over as soon as they arrive.
+    initialRect: { width: 0, height: 512 },
+  })
+  const virtualRows = virtualizer.getVirtualItems()
+  const paddingTop = virtualize && virtualRows.length > 0 ? virtualRows[0].start : 0
+  const paddingBottom =
+    virtualize && virtualRows.length > 0 ? virtualizer.getTotalSize() - virtualRows[virtualRows.length - 1].end : 0
+
   const loading = tasksQuery.isLoading
   const forbidden = isForbidden(tasksQuery.error)
   const failed = tasksQuery.isError && !isForbidden(tasksQuery.error)
@@ -560,8 +586,12 @@ export function TaskBoardPage() {
             No tasks in this project yet.
           </Alert>
         ) : (
-          <TableContainer component={Card}>
-            <Table aria-label="Tasks">
+          <TableContainer
+            component={Card}
+            ref={scrollRef}
+            sx={virtualize ? { maxHeight: VIRTUAL_VIEWPORT, overflowY: 'auto' } : undefined}
+          >
+            <Table aria-label="Tasks" stickyHeader={virtualize}>
               <TableHead>
                 {table.getHeaderGroups().map((headerGroup) => (
                   <TableRow key={headerGroup.id}>
@@ -583,13 +613,23 @@ export function TaskBoardPage() {
                 ))}
               </TableHead>
               <TableBody>
-                {table.getRowModel().rows.map((row) => (
+                {paddingTop > 0 && (
+                  <TableRow style={{ height: paddingTop }}>
+                    <TableCell colSpan={3} sx={{ p: 0, border: 0 }} />
+                  </TableRow>
+                )}
+                {(virtualize ? virtualRows.map((virtualRow) => rows[virtualRow.index]) : rows).map((row) => (
                   <TableRow key={row.id} hover selected={row.original.id === selectedTaskId}>
                     {row.getAllCells().map((cell) => (
                       <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
                     ))}
                   </TableRow>
                 ))}
+                {paddingBottom > 0 && (
+                  <TableRow style={{ height: paddingBottom }}>
+                    <TableCell colSpan={3} sx={{ p: 0, border: 0 }} />
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </TableContainer>
