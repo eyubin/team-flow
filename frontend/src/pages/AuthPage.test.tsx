@@ -1,34 +1,18 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter } from 'react-router-dom'
-import { createTestQueryClient } from '../test/queryClient.ts'
+import { screen, waitFor } from '@testing-library/react'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { http, HttpResponse } from 'msw'
+import { server } from '../test/msw/server.ts'
+import { profile } from '../test/msw/handlers.ts'
+import { renderWithProviders } from '../test/render.tsx'
 import { AuthPage } from './AuthPage.tsx'
 
-function response(body: unknown, ok = true, status = 200) {
-  return { ok, status, json: async () => body }
-}
-
-function renderAuthPage() {
-  return render(
-    <MemoryRouter>
-      <QueryClientProvider client={createTestQueryClient()}>
-        <AuthPage />
-      </QueryClientProvider>
-    </MemoryRouter>,
-  )
-}
-
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
+beforeEach(() => {
+  document.cookie = 'XSRF-TOKEN=csrf-value'
 })
 
 describe('AuthPage', () => {
   it('shows the login form when no session exists', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({}, false, 401)))
-
-    renderAuthPage()
+    renderWithProviders(<AuthPage />)
 
     expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
     expect(screen.getByLabelText('Email')).toBeInTheDocument()
@@ -36,26 +20,37 @@ describe('AuthPage', () => {
   })
 
   it('registers through the CSRF-protected API and shows the profile', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(response({}, false, 401))
-      .mockResolvedValueOnce(response({}, true, 204))
-      .mockResolvedValueOnce(response({ email: 'new@example.com', displayName: 'New User' }, true, 201))
-    vi.stubGlobal('fetch', fetchMock)
-    document.cookie = 'XSRF-TOKEN=csrf-value'
+    let registerHeaders: Headers | undefined
+    server.use(
+      http.post('/api/auth/register', ({ request }) => {
+        registerHeaders = request.headers
+        return HttpResponse.json({ ...profile, email: 'new@example.com', displayName: 'New User' }, { status: 201 })
+      }),
+    )
 
-    renderAuthPage()
-    fireEvent.click(await screen.findByRole('button', { name: 'Need an account?' }))
-    fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'New User' } })
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'new@example.com' } })
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
-    fireEvent.submit(screen.getByRole('button', { name: 'Register' }).closest('form')!)
+    const { user } = renderWithProviders(<AuthPage />)
+
+    await user.click(await screen.findByRole('button', { name: 'Need an account?' }))
+    await user.type(screen.getByLabelText('Display name'), 'New User')
+    await user.type(screen.getByLabelText('Email'), 'new@example.com')
+    await user.type(screen.getByLabelText('Password'), 'password123')
+    await user.click(screen.getByRole('button', { name: 'Register' }))
 
     expect(await screen.findByText('Welcome, New User')).toBeInTheDocument()
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3))
-    expect(fetchMock.mock.calls[2][1]).toMatchObject({
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json', 'X-XSRF-TOKEN': 'csrf-value' },
-    })
+    await waitFor(() => expect(registerHeaders).toBeDefined())
+    expect(registerHeaders?.get('X-XSRF-TOKEN')).toBe('csrf-value')
+    expect(registerHeaders?.get('Content-Type')).toBe('application/json')
+  })
+
+  it('reports an error when the credentials are rejected', async () => {
+    server.use(http.post('/api/auth/login', () => HttpResponse.json({ detail: 'Invalid email or password' }, { status: 401 })))
+
+    const { user } = renderWithProviders(<AuthPage />)
+
+    await user.type(await screen.findByLabelText('Email'), 'ada@example.com')
+    await user.type(screen.getByLabelText('Password'), 'wrong-password')
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+
+    expect(await screen.findByText('Invalid email or password')).toBeInTheDocument()
   })
 })
