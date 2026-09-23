@@ -22,6 +22,7 @@ import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import { isForbidden, request } from '../lib/api.ts'
 import { firstErrorMessage } from '../lib/formError.ts'
+import { queryKeys } from '../lib/queryKeys.ts'
 import { Forbidden } from '../components/Forbidden.tsx'
 import { QueryError } from '../components/QueryError.tsx'
 import { StatusMessage, type StatusMessageValue } from '../components/StatusMessage.tsx'
@@ -66,11 +67,11 @@ export function MembersPage() {
   const [memberPendingRemoval, setMemberPendingRemoval] = useState<Member | null>(null)
   const queryClient = useQueryClient()
 
-  const workspacesQuery = useQuery({ queryKey: ['workspaces'], queryFn: fetchWorkspaces })
+  const workspacesQuery = useQuery({ queryKey: queryKeys.workspaces.all(), queryFn: fetchWorkspaces })
   const workspace = workspacesQuery.data?.find((item) => item.id === workspaceId)
 
   const membersQuery = useQuery({
-    queryKey: ['workspaces', workspaceId, 'members'],
+    queryKey: queryKeys.workspaces.members(workspaceId!),
     queryFn: () => request(`/api/workspaces/${workspaceId}/members`) as Promise<Member[]>,
     enabled: !!workspaceId,
   })
@@ -90,7 +91,7 @@ export function MembersPage() {
       request(`/api/workspaces/${workspaceId}/members`, { method: 'POST', body: JSON.stringify(values) }),
     onSuccess: () => {
       memberForm.reset()
-      void queryClient.invalidateQueries({ queryKey: ['workspaces', workspaceId, 'members'] })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.workspaces.members(workspaceId!) })
       setMessage({ text: 'Member added', tone: 'success' })
     },
     onError: (error: unknown) => {
@@ -103,7 +104,7 @@ export function MembersPage() {
     mutationFn: ({ member, role }: { member: Member; role: Member['role'] }) =>
       request(`/api/workspaces/${workspaceId}/members/${member.userId}`, { method: 'PATCH', body: JSON.stringify({ role }) }),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['workspaces', workspaceId, 'members'] })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.workspaces.members(workspaceId!) })
       setMessage({ text: 'Member role updated', tone: 'success' })
     },
     onError: (error: unknown) => {
@@ -116,7 +117,7 @@ export function MembersPage() {
     mutationFn: (member: Member) =>
       request(`/api/workspaces/${workspaceId}/members/${member.userId}`, { method: 'DELETE' }),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['workspaces', workspaceId, 'members'] })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.workspaces.members(workspaceId!) })
       setMessage({ text: 'Member removed', tone: 'success' })
     },
     onError: (error: unknown) => {

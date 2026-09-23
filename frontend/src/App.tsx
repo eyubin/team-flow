@@ -10,6 +10,7 @@ import { MembersPage } from './pages/MembersPage.tsx'
 import { TaskBoardPage } from './pages/TaskBoardPage.tsx'
 import { NotFoundPage } from './pages/NotFoundPage.tsx'
 import { onUnauthorized } from './lib/api.ts'
+import { queryKeys } from './lib/queryKeys.ts'
 
 export default function App() {
   const navigate = useNavigate()
@@ -17,7 +18,7 @@ export default function App() {
 
   useEffect(() => {
     onUnauthorized(() => {
-      queryClient.setQueryData(['auth', 'me'], null)
+      queryClient.setQueryData(queryKeys.auth.me(), null)
       navigate('/', { replace: true })
     })
     return () => onUnauthorized(null)

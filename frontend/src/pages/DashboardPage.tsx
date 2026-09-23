@@ -15,6 +15,7 @@ import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import { isForbidden, request } from '../lib/api.ts'
 import { firstErrorMessage } from '../lib/formError.ts'
+import { queryKeys } from '../lib/queryKeys.ts'
 import { Forbidden } from '../components/Forbidden.tsx'
 import { QueryError } from '../components/QueryError.tsx'
 import { StatusMessage, type StatusMessageValue } from '../components/StatusMessage.tsx'
@@ -56,14 +57,14 @@ export function DashboardPage() {
   const [actionForbidden, setActionForbidden] = useState(false)
   const queryClient = useQueryClient()
 
-  const workspacesQuery = useQuery({ queryKey: ['workspaces'], queryFn: fetchWorkspaces })
+  const workspacesQuery = useQuery({ queryKey: queryKeys.workspaces.all(), queryFn: fetchWorkspaces })
   const workspaces = workspacesQuery.data ?? []
   // Falls back to the first workspace until the user explicitly picks one, so a
   // freshly created (or freshly loaded) workspace is usable without an extra click.
   const activeWorkspace = selectedWorkspace || workspaces[0]?.id || ''
 
   const projectsQuery = useQuery({
-    queryKey: ['workspaces', activeWorkspace, 'projects'],
+    queryKey: queryKeys.workspaces.projects(activeWorkspace),
     queryFn: () => request(`/api/workspaces/${activeWorkspace}/projects`) as Promise<Project[]>,
     enabled: !!activeWorkspace,
   })
@@ -91,7 +92,7 @@ export function DashboardPage() {
       request('/api/workspaces', { method: 'POST', body: JSON.stringify(values) }) as Promise<Workspace>,
     onSuccess: (workspace) => {
       workspaceForm.reset()
-      void queryClient.invalidateQueries({ queryKey: ['workspaces'] })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.workspaces.all() })
       setSelectedWorkspace(workspace.id)
       setMessage({ text: 'Workspace created', tone: 'success' })
     },
@@ -106,7 +107,7 @@ export function DashboardPage() {
       request(`/api/workspaces/${activeWorkspace}/projects`, { method: 'POST', body: JSON.stringify(values) }),
     onSuccess: () => {
       projectForm.reset()
-      void queryClient.invalidateQueries({ queryKey: ['workspaces', activeWorkspace, 'projects'] })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.workspaces.projects(activeWorkspace) })
       setMessage({ text: 'Project created', tone: 'success' })
     },
     onError: (error: unknown) => {

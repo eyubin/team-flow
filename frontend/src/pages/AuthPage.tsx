@@ -17,6 +17,7 @@ import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import { useProfile, type Profile } from '../lib/auth.ts'
 import { firstErrorMessage } from '../lib/formError.ts'
+import { queryKeys } from '../lib/queryKeys.ts'
 import { StatusMessage, type StatusMessageValue } from '../components/StatusMessage.tsx'
 import { useDocumentTitle } from '../lib/useDocumentTitle.ts'
 
@@ -106,7 +107,7 @@ export function AuthPage() {
   const authMutation = useMutation({
     mutationFn: (values: LoginValues | RegisterValues) => authenticate(mode, values),
     onSuccess: (profile) => {
-      queryClient.setQueryData(['auth', 'me'], profile)
+      queryClient.setQueryData(queryKeys.auth.me(), profile)
       setMessage({ text: 'Signed in', tone: 'success' })
       navigate('/dashboard')
     },
@@ -121,7 +122,7 @@ export function AuthPage() {
   const logoutMutation = useMutation({
     mutationFn: signOut,
     onSuccess: () => {
-      queryClient.setQueryData(['auth', 'me'], null)
+      queryClient.setQueryData(queryKeys.auth.me(), null)
       setMessage({ text: 'Signed out', tone: 'success' })
     },
   })

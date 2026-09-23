@@ -41,6 +41,7 @@ import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import { ApiError, isForbidden, request } from '../lib/api.ts'
 import { firstErrorMessage } from '../lib/formError.ts'
+import { queryKeys } from '../lib/queryKeys.ts'
 import { Forbidden } from '../components/Forbidden.tsx'
 import { QueryError } from '../components/QueryError.tsx'
 import { StatusMessage, type StatusMessageValue } from '../components/StatusMessage.tsx'
@@ -233,9 +234,12 @@ export function TaskBoardPage() {
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [sorting, setSorting] = useState<SortingState>([])
 
-  const tasksQueryKey = ['tasks', projectId, filterStatus, filterPriority, assigneeFilter] as const
   const tasksQuery = useQuery({
-    queryKey: tasksQueryKey,
+    queryKey: queryKeys.tasks.list(projectId!, {
+      status: filterStatus,
+      priority: filterPriority,
+      assigneeId: assigneeFilter,
+    }),
     queryFn: () => fetchTasks(projectId!, filterStatus, filterPriority, assigneeFilter),
     enabled: !!projectId,
   })
@@ -243,14 +247,14 @@ export function TaskBoardPage() {
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null
 
   const commentsQuery = useQuery({
-    queryKey: ['tasks', selectedTaskId, 'comments'],
+    queryKey: queryKeys.comments.byTask(selectedTaskId!),
     queryFn: () => request(`/api/tasks/${selectedTaskId}/comments`) as Promise<Comment[]>,
     enabled: !!selectedTaskId,
   })
   const comments = commentsQuery.data ?? []
 
   const auditQuery = useQuery({
-    queryKey: ['audit-events', selectedTaskId],
+    queryKey: queryKeys.auditEvents.byTask(selectedTaskId!),
     queryFn: () => request(`/api/audit-events?entityType=TASK&entityId=${selectedTaskId}`) as Promise<{ content: AuditEvent[] }>,
     enabled: !!selectedTaskId,
   })
@@ -281,7 +285,7 @@ export function TaskBoardPage() {
       }),
     onSuccess: () => {
       createForm.reset()
-      void queryClient.invalidateQueries({ queryKey: ['tasks', projectId] })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.byProject(projectId!) })
       setMessage({ text: 'Task created', tone: 'success' })
     },
     onError: (error: unknown) => {
@@ -297,7 +301,7 @@ export function TaskBoardPage() {
         body: JSON.stringify({ ...values, version: selectedTask!.version, assigneeId: values.assigneeId.trim() || null }),
       }) as Promise<Task>,
     onSuccess: (updated) => {
-      queryClient.setQueriesData<TaskPage>({ queryKey: ['tasks', projectId] }, (old) =>
+      queryClient.setQueriesData<TaskPage>({ queryKey: queryKeys.tasks.byProject(projectId!) }, (old) =>
         old ? { ...old, content: old.content.map((task) => (task.id === updated.id ? updated : task)) } : old)
       setHasConflict(false)
       setMessage({ text: 'Task updated', tone: 'success' })
@@ -317,7 +321,7 @@ export function TaskBoardPage() {
   const deleteTaskMutation = useMutation({
     mutationFn: () => request(`/api/tasks/${selectedTask!.id}`, { method: 'DELETE' }),
     onSuccess: () => {
-      queryClient.setQueriesData<TaskPage>({ queryKey: ['tasks', projectId] }, (old) =>
+      queryClient.setQueriesData<TaskPage>({ queryKey: queryKeys.tasks.byProject(projectId!) }, (old) =>
         old ? { ...old, content: old.content.filter((task) => task.id !== selectedTask!.id) } : old)
       setSelectedTaskId(null)
       setMessage({ text: 'Task deleted', tone: 'success' })
@@ -332,7 +336,7 @@ export function TaskBoardPage() {
     mutationFn: (values: CommentValues) =>
       request(`/api/tasks/${selectedTask!.id}/comments`, { method: 'POST', body: JSON.stringify(values) }) as Promise<Comment>,
     onSuccess: (comment) => {
-      queryClient.setQueryData<Comment[]>(['tasks', selectedTaskId, 'comments'], (old) => [comment, ...(old ?? [])])
+      queryClient.setQueryData<Comment[]>(queryKeys.comments.byTask(selectedTaskId!), (old) => [comment, ...(old ?? [])])
       commentForm.reset()
       setMessage({ text: 'Comment added', tone: 'success' })
     },
@@ -352,11 +356,11 @@ export function TaskBoardPage() {
     if (!selectedTask) return
     try {
       const fresh = (await request(`/api/tasks/${selectedTask.id}`)) as Task
-      queryClient.setQueriesData<TaskPage>({ queryKey: ['tasks', projectId] }, (old) =>
+      queryClient.setQueriesData<TaskPage>({ queryKey: queryKeys.tasks.byProject(projectId!) }, (old) =>
         old ? { ...old, content: old.content.map((task) => (task.id === fresh.id ? fresh : task)) } : old)
       setHasConflict(false)
-      void queryClient.invalidateQueries({ queryKey: ['tasks', fresh.id, 'comments'] })
-      void queryClient.invalidateQueries({ queryKey: ['audit-events', fresh.id] })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.comments.byTask(fresh.id) })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.auditEvents.byTask(fresh.id) })
       setMessage({ text: 'Task reloaded', tone: 'success' })
     } catch (error) {
       setMessage({ text: error instanceof Error ? error.message : 'Unable to reload task', tone: 'error' })
