@@ -1,26 +1,47 @@
-import { useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { Link as RouterLink, useParams } from 'react-router-dom'
-import { Controller, useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
+import { useForm } from '@tanstack/react-form'
 import { z } from 'zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  AlertDialog,
-  Badge,
-  Box,
-  Button,
-  Callout,
-  Card,
-  Flex,
-  Heading,
-  Link,
-  Select,
-  Separator,
-  Text,
-  TextField,
-} from '@radix-ui/themes'
-import { ExclamationTriangleIcon, InfoCircledIcon } from '@radix-ui/react-icons'
+  createColumnHelper,
+  createCoreRowModel,
+  createSortedRowModel,
+  flexRender,
+  rowSortingFeature,
+  sortFn_text,
+  tableFeatures,
+  useTable,
+  type SortingState,
+} from '@tanstack/react-table'
+import { useVirtualizer } from '@tanstack/react-virtual'
+import Alert from '@mui/material/Alert'
+import Box from '@mui/material/Box'
+import Button from '@mui/material/Button'
+import Card from '@mui/material/Card'
+import CardContent from '@mui/material/CardContent'
+import Chip from '@mui/material/Chip'
+import Dialog from '@mui/material/Dialog'
+import DialogActions from '@mui/material/DialogActions'
+import DialogContent from '@mui/material/DialogContent'
+import DialogContentText from '@mui/material/DialogContentText'
+import DialogTitle from '@mui/material/DialogTitle'
+import Divider from '@mui/material/Divider'
+import Link from '@mui/material/Link'
+import MenuItem from '@mui/material/MenuItem'
+import Stack from '@mui/material/Stack'
+import Table from '@mui/material/Table'
+import TableBody from '@mui/material/TableBody'
+import TableCell from '@mui/material/TableCell'
+import TableContainer from '@mui/material/TableContainer'
+import TableHead from '@mui/material/TableHead'
+import TableRow from '@mui/material/TableRow'
+import TableSortLabel from '@mui/material/TableSortLabel'
+import TextField from '@mui/material/TextField'
+import Typography from '@mui/material/Typography'
 import { ApiError, isForbidden, request } from '../lib/api.ts'
+import { firstErrorMessage } from '../lib/formError.ts'
+import { queryKeys } from '../lib/queryKeys.ts'
 import { Forbidden } from '../components/Forbidden.tsx'
 import { QueryError } from '../components/QueryError.tsx'
 import { StatusMessage, type StatusMessageValue } from '../components/StatusMessage.tsx'
@@ -53,9 +74,29 @@ const commentSchema = z.object({
 })
 type CommentValues = z.infer<typeof commentSchema>
 
+const taskTableFeatures = tableFeatures({
+  rowSortingFeature,
+  coreRowModel: createCoreRowModel(),
+  sortedRowModel: createSortedRowModel(),
+  sortFns: { text: sortFn_text },
+})
+
+const columnHelper = createColumnHelper<typeof taskTableFeatures, Task>()
+
+// Long boards get virtualised rows; short ones render plainly, so the common
+// case carries no scroll container and no windowing maths.
+const VIRTUALIZE_ABOVE = 30
+const ROW_HEIGHT = 53
+const VIRTUAL_VIEWPORT = '32rem'
+
+// Stable identity: useForm re-applies its options on every render, so a fresh
+// object literal here would push these defaults back over a reset().
+const EMPTY_TASK_FORM: TaskFormValues = { title: '', status: 'TODO', priority: 'MEDIUM', assigneeId: '' }
+const EMPTY_COMMENT_FORM: CommentValues = { body: '' }
+
 const STATUS_LABEL: Record<Task['status'], string> = { TODO: 'To do', IN_PROGRESS: 'In progress', DONE: 'Done' }
-const PRIORITY_COLOR: Record<Task['priority'], 'gray' | 'amber' | 'red'> = { LOW: 'gray', MEDIUM: 'amber', HIGH: 'red' }
-const STATUS_COLOR: Record<Task['status'], 'gray' | 'iris' | 'green'> = { TODO: 'gray', IN_PROGRESS: 'iris', DONE: 'green' }
+const PRIORITY_COLOR: Record<Task['priority'], 'default' | 'warning' | 'error'> = { LOW: 'default', MEDIUM: 'warning', HIGH: 'error' }
+const STATUS_COLOR: Record<Task['status'], 'default' | 'primary' | 'success'> = { TODO: 'default', IN_PROGRESS: 'primary', DONE: 'success' }
 
 async function fetchTasks(projectId: string, filterStatus: string, filterPriority: string, assigneeFilter: string) {
   await request('/api/auth/csrf')
@@ -68,6 +109,114 @@ async function fetchTasks(projectId: string, filterStatus: string, filterPriorit
 
 function taskToFormValues(task: Task): TaskFormValues {
   return { title: task.title, status: task.status, priority: task.priority, assigneeId: task.assigneeId ?? '' }
+}
+
+type TaskEditFormProps = {
+  task: Task
+  saving: boolean
+  onSave: (values: TaskFormValues) => void
+  onDelete: () => void
+}
+
+/**
+ * The detail form lives in its own component so it can be remounted per task
+ * version. TanStack Form reads `defaultValues` when a field mounts, and a
+ * field that mounts after a `reset()` re-initialises from those defaults and
+ * discards the reset - so filling the form by resetting it is not reliable
+ * when the fields themselves appear and disappear with the selection.
+ */
+function TaskEditForm({ task, saving, onSave, onDelete }: TaskEditFormProps) {
+  // Captured once per mount, so a background refetch cannot overwrite edits.
+  const [initialValues] = useState(() => taskToFormValues(task))
+  const form = useForm({
+    defaultValues: initialValues,
+    validators: { onSubmit: taskFormSchema },
+    onSubmit: ({ value }) => onSave(value),
+  })
+
+  return (
+    <Card>
+      <CardContent>
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  void form.handleSubmit()
+                }}
+                noValidate
+              >
+                <Stack spacing={1.5}>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', sm: 'flex-start' }, flexWrap: 'wrap' }}>
+                    <form.Field name="title">
+                      {(field) => (
+                        <TextField
+                          label="Title"
+                          sx={{ flexGrow: 1, minWidth: '12rem' }}
+                          value={field.state.value}
+                          onChange={(event) => field.handleChange(event.target.value)}
+                          onBlur={field.handleBlur}
+                          error={field.state.meta.errors.length > 0}
+                          helperText={firstErrorMessage(field.state.meta.errors)}
+                          slotProps={{ htmlInput: { maxLength: 200 }, formHelperText: { role: 'alert' } }}
+                        />
+                      )}
+                    </form.Field>
+                    <form.Field name="status">
+                      {(field) => (
+                        <TextField
+                          select
+                          label="Task status"
+                          sx={{ minWidth: '9rem' }}
+                          value={field.state.value}
+                          onChange={(event) => field.handleChange(event.target.value as Task['status'])}
+                          onBlur={field.handleBlur}
+                        >
+                          <MenuItem value="TODO">To do</MenuItem>
+                          <MenuItem value="IN_PROGRESS">In progress</MenuItem>
+                          <MenuItem value="DONE">Done</MenuItem>
+                        </TextField>
+                      )}
+                    </form.Field>
+                    <form.Field name="priority">
+                      {(field) => (
+                        <TextField
+                          select
+                          label="Task priority"
+                          sx={{ minWidth: '9rem' }}
+                          value={field.state.value}
+                          onChange={(event) => field.handleChange(event.target.value as Task['priority'])}
+                          onBlur={field.handleBlur}
+                        >
+                          <MenuItem value="LOW">Low</MenuItem>
+                          <MenuItem value="MEDIUM">Medium</MenuItem>
+                          <MenuItem value="HIGH">High</MenuItem>
+                        </TextField>
+                      )}
+                    </form.Field>
+                    <form.Field name="assigneeId">
+                      {(field) => (
+                        <TextField
+                          label="Task assignee ID"
+                          placeholder="Optional UUID"
+                          value={field.state.value}
+                          onChange={(event) => field.handleChange(event.target.value)}
+                          onBlur={field.handleBlur}
+                        />
+                      )}
+                    </form.Field>
+                  </Stack>
+                  <Stack direction="row" spacing={1.5}>
+                    <Button type="submit" variant="contained" disabled={saving}>
+                      Save task
+                    </Button>
+                    <Button type="button" color="error" variant="outlined" onClick={onDelete}>
+                      Delete task
+                    </Button>
+                  </Stack>
+                </Stack>
+              </form>
+      </CardContent>
+    </Card>
+  )
 }
 
 export function TaskBoardPage() {
@@ -83,10 +232,14 @@ export function TaskBoardPage() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [hasConflict, setHasConflict] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [sorting, setSorting] = useState<SortingState>([])
 
-  const tasksQueryKey = ['tasks', projectId, filterStatus, filterPriority, assigneeFilter] as const
   const tasksQuery = useQuery({
-    queryKey: tasksQueryKey,
+    queryKey: queryKeys.tasks.list(projectId!, {
+      status: filterStatus,
+      priority: filterPriority,
+      assigneeId: assigneeFilter,
+    }),
     queryFn: () => fetchTasks(projectId!, filterStatus, filterPriority, assigneeFilter),
     enabled: !!projectId,
   })
@@ -94,25 +247,35 @@ export function TaskBoardPage() {
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null
 
   const commentsQuery = useQuery({
-    queryKey: ['tasks', selectedTaskId, 'comments'],
+    queryKey: queryKeys.comments.byTask(selectedTaskId!),
     queryFn: () => request(`/api/tasks/${selectedTaskId}/comments`) as Promise<Comment[]>,
     enabled: !!selectedTaskId,
   })
   const comments = commentsQuery.data ?? []
 
   const auditQuery = useQuery({
-    queryKey: ['audit-events', selectedTaskId],
+    queryKey: queryKeys.auditEvents.byTask(selectedTaskId!),
     queryFn: () => request(`/api/audit-events?entityType=TASK&entityId=${selectedTaskId}`) as Promise<{ content: AuditEvent[] }>,
     enabled: !!selectedTaskId,
   })
   const auditEvents = auditQuery.data?.content ?? []
 
-  const createForm = useForm<TaskFormValues>({
-    resolver: zodResolver(taskFormSchema),
-    defaultValues: { title: '', status: 'TODO', priority: 'MEDIUM', assigneeId: '' },
+  const createForm = useForm({
+    defaultValues: EMPTY_TASK_FORM,
+    validators: { onSubmit: taskFormSchema },
+    onSubmit: ({ value }) => {
+      setActionForbidden(false)
+      createTaskMutation.mutate(value)
+    },
   })
-  const editForm = useForm<TaskFormValues>({ resolver: zodResolver(taskFormSchema) })
-  const commentForm = useForm<CommentValues>({ resolver: zodResolver(commentSchema), defaultValues: { body: '' } })
+  const commentForm = useForm({
+    defaultValues: EMPTY_COMMENT_FORM,
+    validators: { onSubmit: commentSchema },
+    onSubmit: ({ value }) => {
+      setActionForbidden(false)
+      addCommentMutation.mutate(value)
+    },
+  })
 
   const createTaskMutation = useMutation({
     mutationFn: (values: TaskFormValues) =>
@@ -122,7 +285,7 @@ export function TaskBoardPage() {
       }),
     onSuccess: () => {
       createForm.reset()
-      void queryClient.invalidateQueries({ queryKey: ['tasks', projectId] })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.byProject(projectId!) })
       setMessage({ text: 'Task created', tone: 'success' })
     },
     onError: (error: unknown) => {
@@ -138,7 +301,7 @@ export function TaskBoardPage() {
         body: JSON.stringify({ ...values, version: selectedTask!.version, assigneeId: values.assigneeId.trim() || null }),
       }) as Promise<Task>,
     onSuccess: (updated) => {
-      queryClient.setQueriesData<TaskPage>({ queryKey: ['tasks', projectId] }, (old) =>
+      queryClient.setQueriesData<TaskPage>({ queryKey: queryKeys.tasks.byProject(projectId!) }, (old) =>
         old ? { ...old, content: old.content.map((task) => (task.id === updated.id ? updated : task)) } : old)
       setHasConflict(false)
       setMessage({ text: 'Task updated', tone: 'success' })
@@ -158,7 +321,7 @@ export function TaskBoardPage() {
   const deleteTaskMutation = useMutation({
     mutationFn: () => request(`/api/tasks/${selectedTask!.id}`, { method: 'DELETE' }),
     onSuccess: () => {
-      queryClient.setQueriesData<TaskPage>({ queryKey: ['tasks', projectId] }, (old) =>
+      queryClient.setQueriesData<TaskPage>({ queryKey: queryKeys.tasks.byProject(projectId!) }, (old) =>
         old ? { ...old, content: old.content.filter((task) => task.id !== selectedTask!.id) } : old)
       setSelectedTaskId(null)
       setMessage({ text: 'Task deleted', tone: 'success' })
@@ -173,7 +336,7 @@ export function TaskBoardPage() {
     mutationFn: (values: CommentValues) =>
       request(`/api/tasks/${selectedTask!.id}/comments`, { method: 'POST', body: JSON.stringify(values) }) as Promise<Comment>,
     onSuccess: (comment) => {
-      queryClient.setQueryData<Comment[]>(['tasks', selectedTaskId, 'comments'], (old) => [comment, ...(old ?? [])])
+      queryClient.setQueryData<Comment[]>(queryKeys.comments.byTask(selectedTaskId!), (old) => [comment, ...(old ?? [])])
       commentForm.reset()
       setMessage({ text: 'Comment added', tone: 'success' })
     },
@@ -183,23 +346,21 @@ export function TaskBoardPage() {
     },
   })
 
-  function selectTask(task: Task) {
+  const selectTask = useCallback((task: Task) => {
     setSelectedTaskId(task.id)
     setHasConflict(false)
     setActionForbidden(false)
-    editForm.reset(taskToFormValues(task))
-  }
+  }, [])
 
   async function reloadSelectedTask() {
     if (!selectedTask) return
     try {
       const fresh = (await request(`/api/tasks/${selectedTask.id}`)) as Task
-      queryClient.setQueriesData<TaskPage>({ queryKey: ['tasks', projectId] }, (old) =>
+      queryClient.setQueriesData<TaskPage>({ queryKey: queryKeys.tasks.byProject(projectId!) }, (old) =>
         old ? { ...old, content: old.content.map((task) => (task.id === fresh.id ? fresh : task)) } : old)
-      editForm.reset(taskToFormValues(fresh))
       setHasConflict(false)
-      void queryClient.invalidateQueries({ queryKey: ['tasks', fresh.id, 'comments'] })
-      void queryClient.invalidateQueries({ queryKey: ['audit-events', fresh.id] })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.comments.byTask(fresh.id) })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.auditEvents.byTask(fresh.id) })
       setMessage({ text: 'Task reloaded', tone: 'success' })
     } catch (error) {
       setMessage({ text: error instanceof Error ? error.message : 'Unable to reload task', tone: 'error' })
@@ -212,429 +373,418 @@ export function TaskBoardPage() {
     deleteTaskMutation.mutate()
   }
 
+  const columns = useMemo(
+    () =>
+      columnHelper.columns([
+      columnHelper.accessor('title', {
+        header: 'Title',
+        sortFn: 'text',
+        cell: (info) => (
+          <Link
+            component="button"
+            type="button"
+            underline="hover"
+            onClick={() => selectTask(info.row.original)}
+            sx={{ fontWeight: 700, textAlign: 'left' }}
+          >
+            {info.getValue()}
+          </Link>
+        ),
+      }),
+      columnHelper.accessor('status', {
+        header: 'Status',
+        cell: (info) => (
+          <Chip size="small" variant="outlined" color={STATUS_COLOR[info.getValue()]} label={STATUS_LABEL[info.getValue()]} />
+        ),
+      }),
+      columnHelper.accessor('priority', {
+        header: 'Priority',
+        cell: (info) => <Chip size="small" variant="outlined" color={PRIORITY_COLOR[info.getValue()]} label={info.getValue()} />,
+      }),
+      ]),
+    [selectTask],
+  )
+
+  const table = useTable({
+    features: taskTableFeatures,
+    data: tasks,
+    columns,
+    state: { sorting },
+    onSortingChange: setSorting,
+  })
+
+  const rows = table.getRowModel().rows
+  const virtualize = rows.length > VIRTUALIZE_ABOVE
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 10,
+    enabled: virtualize,
+    // Gives the window a sane size before the scroll element is measured, so
+    // the first paint (and any non-layout environment) renders rows rather
+    // than nothing. Real measurements take over as soon as they arrive.
+    initialRect: { width: 0, height: 512 },
+  })
+  const virtualRows = virtualizer.getVirtualItems()
+  const paddingTop = virtualize && virtualRows.length > 0 ? virtualRows[0].start : 0
+  const paddingBottom =
+    virtualize && virtualRows.length > 0 ? virtualizer.getTotalSize() - virtualRows[virtualRows.length - 1].end : 0
+
   const loading = tasksQuery.isLoading
   const forbidden = isForbidden(tasksQuery.error)
   const failed = tasksQuery.isError && !isForbidden(tasksQuery.error)
 
   if (loading)
     return (
-      <Box asChild>
-        <main>
-          <Text>Loading tasks...</Text>
-        </main>
+      <Box component="main">
+        <Typography aria-live="polite">Loading tasks...</Typography>
       </Box>
     )
   if (forbidden) return <Forbidden message="You don't have access to this project's task board." />
   if (failed)
     return (
-      <Box asChild>
-        <main>
-          <QueryError message="We couldn't load this project's tasks." onRetry={() => void tasksQuery.refetch()} />
-        </main>
+      <Box component="main">
+        <QueryError message="We couldn't load this project's tasks." onRetry={() => void tasksQuery.refetch()} />
       </Box>
     )
 
   return (
-    <Box asChild>
-      <main>
-        <Flex direction="column" gap="6">
-          <Flex direction="column" gap="3">
-            <Text size="1" color="iris" weight="bold" style={{ letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-              TeamFlow project
-            </Text>
-            <Heading as="h1" size="8">
-              Task board
-            </Heading>
-          </Flex>
+    <Box component="main">
+      <Stack spacing={4}>
+        <Stack spacing={1.5}>
+          <Typography variant="overline" color="primary.main" sx={{ fontWeight: 700, letterSpacing: '0.08em' }}>
+            TeamFlow project
+          </Typography>
+          <Typography variant="h3" component="h1" sx={{ fontWeight: 700 }}>
+            Task board
+          </Typography>
+        </Stack>
 
-          <Card size="3">
+        <Card>
+          <CardContent>
             <form
-              onSubmit={createForm.handleSubmit((values) => {
-                setActionForbidden(false)
-                createTaskMutation.mutate(values)
-              })}
+              onSubmit={(event) => {
+                event.preventDefault()
+                void createForm.handleSubmit()
+              }}
               noValidate
             >
-              <Flex direction={{ initial: 'column', sm: 'row' }} align={{ initial: 'stretch', sm: 'end' }} gap="3" wrap="wrap">
-                <Flex asChild direction="column" gap="1" flexGrow="1" minWidth="12rem">
-                  <label>
-                    <Text weight="medium" size="2">
-                      New task
-                    </Text>
-                    <TextField.Root {...createForm.register('title')} maxLength={200} aria-invalid={!!createForm.formState.errors.title} />
-                    {createForm.formState.errors.title && (
-                      <Text role="alert" color="red" size="1">
-                        {createForm.formState.errors.title.message}
-                      </Text>
-                    )}
-                  </label>
-                </Flex>
-                <Flex asChild direction="column" gap="1">
-                  <label>
-                    <Text weight="medium" size="2">
-                      Status
-                    </Text>
-                    <Controller
-                      name="status"
-                      control={createForm.control}
-                      render={({ field }) => (
-                        <Select.Root value={field.value} onValueChange={field.onChange}>
-                          <Select.Trigger aria-label="Status" />
-                          <Select.Content>
-                            <Select.Item value="TODO">To do</Select.Item>
-                            <Select.Item value="IN_PROGRESS">In progress</Select.Item>
-                            <Select.Item value="DONE">Done</Select.Item>
-                          </Select.Content>
-                        </Select.Root>
-                      )}
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', sm: 'flex-start' } }}>
+                <createForm.Field name="title">
+                  {(field) => (
+                    <TextField
+                      label="New task"
+                      sx={{ flexGrow: 1, minWidth: '12rem' }}
+                      value={field.state.value}
+                      onChange={(event) => field.handleChange(event.target.value)}
+                      onBlur={field.handleBlur}
+                      error={field.state.meta.errors.length > 0}
+                      helperText={firstErrorMessage(field.state.meta.errors)}
+                      slotProps={{ htmlInput: { maxLength: 200 }, formHelperText: { role: 'alert' } }}
                     />
-                  </label>
-                </Flex>
-                <Flex asChild direction="column" gap="1">
-                  <label>
-                    <Text weight="medium" size="2">
-                      Priority
-                    </Text>
-                    <Controller
-                      name="priority"
-                      control={createForm.control}
-                      render={({ field }) => (
-                        <Select.Root value={field.value} onValueChange={field.onChange}>
-                          <Select.Trigger aria-label="Priority" />
-                          <Select.Content>
-                            <Select.Item value="LOW">Low</Select.Item>
-                            <Select.Item value="MEDIUM">Medium</Select.Item>
-                            <Select.Item value="HIGH">High</Select.Item>
-                          </Select.Content>
-                        </Select.Root>
-                      )}
+                  )}
+                </createForm.Field>
+                <createForm.Field name="status">
+                  {(field) => (
+                    <TextField
+                      select
+                      label="Status"
+                      sx={{ minWidth: '9rem' }}
+                      value={field.state.value}
+                      onChange={(event) => field.handleChange(event.target.value as Task['status'])}
+                      onBlur={field.handleBlur}
+                    >
+                      <MenuItem value="TODO">To do</MenuItem>
+                      <MenuItem value="IN_PROGRESS">In progress</MenuItem>
+                      <MenuItem value="DONE">Done</MenuItem>
+                    </TextField>
+                  )}
+                </createForm.Field>
+                <createForm.Field name="priority">
+                  {(field) => (
+                    <TextField
+                      select
+                      label="Priority"
+                      sx={{ minWidth: '9rem' }}
+                      value={field.state.value}
+                      onChange={(event) => field.handleChange(event.target.value as Task['priority'])}
+                      onBlur={field.handleBlur}
+                    >
+                      <MenuItem value="LOW">Low</MenuItem>
+                      <MenuItem value="MEDIUM">Medium</MenuItem>
+                      <MenuItem value="HIGH">High</MenuItem>
+                    </TextField>
+                  )}
+                </createForm.Field>
+                <createForm.Field name="assigneeId">
+                  {(field) => (
+                    <TextField
+                      label="Assignee ID"
+                      placeholder="Optional UUID"
+                      sx={{ minWidth: '10rem' }}
+                      value={field.state.value}
+                      onChange={(event) => field.handleChange(event.target.value)}
+                      onBlur={field.handleBlur}
                     />
-                  </label>
-                </Flex>
-                <Flex asChild direction="column" gap="1">
-                  <label>
-                    <Text weight="medium" size="2">
-                      Assignee ID
-                    </Text>
-                    <TextField.Root {...createForm.register('assigneeId')} placeholder="Optional UUID" />
-                  </label>
-                </Flex>
-                <Button type="submit" disabled={createTaskMutation.isPending}>
+                  )}
+                </createForm.Field>
+                <Button
+                  type="submit"
+                  variant="contained"
+                  disabled={createTaskMutation.isPending}
+                  sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}
+                >
                   Create task
                 </Button>
-              </Flex>
+              </Stack>
             </form>
-          </Card>
+          </CardContent>
+        </Card>
 
-          <Card size="2" variant="surface">
+        <Card>
+          <CardContent>
             <form onSubmit={(event) => { event.preventDefault(); void tasksQuery.refetch() }}>
-              <Flex direction={{ initial: 'column', sm: 'row' }} align={{ initial: 'stretch', sm: 'end' }} gap="3" wrap="wrap">
-                <Flex asChild direction="column" gap="1">
-                  <label>
-                    <Text weight="medium" size="2">
-                      Filter status
-                    </Text>
-                    <Select.Root
-                      value={filterStatus || 'ALL'}
-                      onValueChange={(value) => setFilterStatus(value === 'ALL' ? '' : (value as Task['status']))}
-                    >
-                      <Select.Trigger aria-label="Filter status" />
-                      <Select.Content>
-                        <Select.Item value="ALL">All statuses</Select.Item>
-                        <Select.Item value="TODO">To do</Select.Item>
-                        <Select.Item value="IN_PROGRESS">In progress</Select.Item>
-                        <Select.Item value="DONE">Done</Select.Item>
-                      </Select.Content>
-                    </Select.Root>
-                  </label>
-                </Flex>
-                <Flex asChild direction="column" gap="1">
-                  <label>
-                    <Text weight="medium" size="2">
-                      Filter priority
-                    </Text>
-                    <Select.Root
-                      value={filterPriority || 'ALL'}
-                      onValueChange={(value) => setFilterPriority(value === 'ALL' ? '' : (value as Task['priority']))}
-                    >
-                      <Select.Trigger aria-label="Filter priority" />
-                      <Select.Content>
-                        <Select.Item value="ALL">All priorities</Select.Item>
-                        <Select.Item value="LOW">Low</Select.Item>
-                        <Select.Item value="MEDIUM">Medium</Select.Item>
-                        <Select.Item value="HIGH">High</Select.Item>
-                      </Select.Content>
-                    </Select.Root>
-                  </label>
-                </Flex>
-                <Flex asChild direction="column" gap="1">
-                  <label>
-                    <Text weight="medium" size="2">
-                      Filter by assignee ID
-                    </Text>
-                    <TextField.Root
-                      value={assigneeFilter}
-                      onChange={(event) => setAssigneeFilter(event.target.value)}
-                      placeholder="Optional UUID"
-                    />
-                  </label>
-                </Flex>
-                <Button type="submit" variant="soft">
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', sm: 'flex-start' }, flexWrap: 'wrap' }}>
+                <TextField
+                  select
+                  label="Filter status"
+                  sx={{ minWidth: '10rem' }}
+                  value={filterStatus || 'ALL'}
+                  onChange={(event) => setFilterStatus(event.target.value === 'ALL' ? '' : (event.target.value as Task['status']))}
+                >
+                  <MenuItem value="ALL">All statuses</MenuItem>
+                  <MenuItem value="TODO">To do</MenuItem>
+                  <MenuItem value="IN_PROGRESS">In progress</MenuItem>
+                  <MenuItem value="DONE">Done</MenuItem>
+                </TextField>
+                <TextField
+                  select
+                  label="Filter priority"
+                  sx={{ minWidth: '10rem' }}
+                  value={filterPriority || 'ALL'}
+                  onChange={(event) => setFilterPriority(event.target.value === 'ALL' ? '' : (event.target.value as Task['priority']))}
+                >
+                  <MenuItem value="ALL">All priorities</MenuItem>
+                  <MenuItem value="LOW">Low</MenuItem>
+                  <MenuItem value="MEDIUM">Medium</MenuItem>
+                  <MenuItem value="HIGH">High</MenuItem>
+                </TextField>
+                <TextField
+                  label="Filter by assignee ID"
+                  placeholder="Optional UUID"
+                  value={assigneeFilter}
+                  onChange={(event) => setAssigneeFilter(event.target.value)}
+                />
+                <Button type="submit" variant="outlined">
                   Apply filters
                 </Button>
                 <Button
                   type="button"
-                  variant="ghost"
-                  onClick={() => { setFilterStatus(''); setFilterPriority(''); setAssigneeFilter(''); }}
+                  onClick={() => { setFilterStatus(''); setFilterPriority(''); setAssigneeFilter('') }}
                 >
                   Clear
                 </Button>
-              </Flex>
+              </Stack>
             </form>
-          </Card>
+          </CardContent>
+        </Card>
 
-          {tasks.length === 0 ? (
-            <Callout.Root color="gray">
-              <Callout.Icon>
-                <InfoCircledIcon />
-              </Callout.Icon>
-              <Callout.Text>No tasks in this project yet.</Callout.Text>
-            </Callout.Root>
-          ) : (
-            <Flex direction="column" gap="3">
-              {tasks.map((task) => (
-                <Card key={task.id} asChild variant={task.id === selectedTaskId ? 'classic' : 'surface'}>
-                  <button type="button" onClick={() => selectTask(task)} style={{ textAlign: 'left', cursor: 'pointer', width: '100%' }}>
-                    <Flex direction="column" gap="2">
-                      <Text weight="bold">{task.title}</Text>
-                      <Flex gap="2">
-                        <Badge color={STATUS_COLOR[task.status]} variant="soft">
-                          {STATUS_LABEL[task.status]}
-                        </Badge>
-                        <Badge color={PRIORITY_COLOR[task.priority]} variant="soft">
-                          {task.priority}
-                        </Badge>
-                      </Flex>
-                    </Flex>
-                  </button>
-                </Card>
-              ))}
-            </Flex>
-          )}
-
-          {selectedTask && (
-            <Flex direction="column" gap="4" asChild>
-              <section aria-labelledby="task-detail-heading">
-                <Separator size="4" />
-                <Heading as="h2" size="6" id="task-detail-heading">
-                  Task details
-                </Heading>
-                <Card size="3">
-                  <form
-                    onSubmit={editForm.handleSubmit((values) => {
-                      setActionForbidden(false)
-                      updateTaskMutation.mutate(values)
+        {tasks.length === 0 ? (
+          <Alert severity="info" role="status">
+            No tasks in this project yet.
+          </Alert>
+        ) : (
+          <TableContainer
+            component={Card}
+            ref={scrollRef}
+            sx={virtualize ? { maxHeight: VIRTUAL_VIEWPORT, overflowY: 'auto' } : undefined}
+          >
+            <Table aria-label="Tasks" stickyHeader={virtualize}>
+              <TableHead>
+                {table.getHeaderGroups().map((headerGroup) => (
+                  <TableRow key={headerGroup.id}>
+                    {headerGroup.headers.map((header) => {
+                      const sorted = header.column.getIsSorted()
+                      return (
+                        <TableCell key={header.id} sortDirection={sorted === false ? false : sorted}>
+                          <TableSortLabel
+                            active={sorted !== false}
+                            direction={sorted === false ? 'asc' : sorted}
+                            onClick={() => header.column.toggleSorting()}
+                          >
+                            {flexRender(header.column.columnDef.header, header.getContext())}
+                          </TableSortLabel>
+                        </TableCell>
+                      )
                     })}
-                    noValidate
-                  >
-                    <Flex direction="column" gap="3">
-                      <Flex direction={{ initial: 'column', sm: 'row' }} align={{ initial: 'stretch', sm: 'end' }} gap="3" wrap="wrap">
-                        <Flex asChild direction="column" gap="1" flexGrow="1" minWidth="12rem">
-                          <label>
-                            <Text weight="medium" size="2">
-                              Title
-                            </Text>
-                            <TextField.Root {...editForm.register('title')} maxLength={200} aria-invalid={!!editForm.formState.errors.title} />
-                          </label>
-                        </Flex>
-                        <Flex asChild direction="column" gap="1">
-                          <label>
-                            <Text weight="medium" size="2">
-                              Status
-                            </Text>
-                            <Controller
-                              name="status"
-                              control={editForm.control}
-                              render={({ field }) => (
-                                <Select.Root value={field.value} onValueChange={field.onChange}>
-                                  <Select.Trigger aria-label="Task status" />
-                                  <Select.Content>
-                                    <Select.Item value="TODO">To do</Select.Item>
-                                    <Select.Item value="IN_PROGRESS">In progress</Select.Item>
-                                    <Select.Item value="DONE">Done</Select.Item>
-                                  </Select.Content>
-                                </Select.Root>
-                              )}
-                            />
-                          </label>
-                        </Flex>
-                        <Flex asChild direction="column" gap="1">
-                          <label>
-                            <Text weight="medium" size="2">
-                              Priority
-                            </Text>
-                            <Controller
-                              name="priority"
-                              control={editForm.control}
-                              render={({ field }) => (
-                                <Select.Root value={field.value} onValueChange={field.onChange}>
-                                  <Select.Trigger aria-label="Task priority" />
-                                  <Select.Content>
-                                    <Select.Item value="LOW">Low</Select.Item>
-                                    <Select.Item value="MEDIUM">Medium</Select.Item>
-                                    <Select.Item value="HIGH">High</Select.Item>
-                                  </Select.Content>
-                                </Select.Root>
-                              )}
-                            />
-                          </label>
-                        </Flex>
-                        <Flex asChild direction="column" gap="1">
-                          <label>
-                            <Text weight="medium" size="2">
-                              Task assignee ID
-                            </Text>
-                            <TextField.Root {...editForm.register('assigneeId')} placeholder="Optional UUID" />
-                          </label>
-                        </Flex>
-                      </Flex>
-                      <Flex gap="3">
-                        <Button type="submit" disabled={updateTaskMutation.isPending}>
-                          Save task
-                        </Button>
-                        <Button type="button" color="red" variant="soft" onClick={() => setConfirmingDelete(true)}>
-                          Delete task
-                        </Button>
-                      </Flex>
-                    </Flex>
-                  </form>
-                </Card>
-
-                {hasConflict && (
-                  <Callout.Root color="amber" role="alert">
-                    <Callout.Icon>
-                      <ExclamationTriangleIcon />
-                    </Callout.Icon>
-                    <Callout.Text>
-                      This task has changed on the server.{' '}
-                      <Link asChild>
-                        <button type="button" onClick={reloadSelectedTask} style={{ all: 'unset', cursor: 'pointer', textDecoration: 'underline' }}>
-                          Reload task
-                        </button>
-                      </Link>
-                    </Callout.Text>
-                  </Callout.Root>
+                  </TableRow>
+                ))}
+              </TableHead>
+              <TableBody>
+                {paddingTop > 0 && (
+                  <TableRow style={{ height: paddingTop }}>
+                    <TableCell colSpan={3} sx={{ p: 0, border: 0 }} />
+                  </TableRow>
                 )}
+                {(virtualize ? virtualRows.map((virtualRow) => rows[virtualRow.index]) : rows).map((row) => (
+                  <TableRow key={row.id} hover selected={row.original.id === selectedTaskId}>
+                    {row.getAllCells().map((cell) => (
+                      <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+                {paddingBottom > 0 && (
+                  <TableRow style={{ height: paddingBottom }}>
+                    <TableCell colSpan={3} sx={{ p: 0, border: 0 }} />
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
 
-                <Flex direction="column" gap="3">
-                  <Heading as="h3" size="4">
-                    Comments
-                  </Heading>
-                  <form
-                    onSubmit={commentForm.handleSubmit((values) => {
-                      setActionForbidden(false)
-                      addCommentMutation.mutate(values)
-                    })}
-                    noValidate
-                  >
-                    <Flex direction={{ initial: 'column', sm: 'row' }} align={{ initial: 'stretch', sm: 'end' }} gap="3" wrap="wrap">
-                      <Flex asChild direction="column" gap="1" flexGrow="1" minWidth="12rem">
-                        <label>
-                          <Text weight="medium" size="2">
-                            Comment
-                          </Text>
-                          <TextField.Root {...commentForm.register('body')} maxLength={4000} aria-invalid={!!commentForm.formState.errors.body} />
-                        </label>
-                      </Flex>
-                      <Button type="submit" disabled={addCommentMutation.isPending}>
-                        Add comment
-                      </Button>
-                    </Flex>
-                  </form>
-                  {commentsQuery.isLoading ? (
-                    <Text as="p" size="2" color="gray" aria-live="polite">
-                      Loading comments...
-                    </Text>
-                  ) : comments.length === 0 ? (
-                    <Callout.Root color="gray" size="1">
-                      <Callout.Text>No comments yet.</Callout.Text>
-                    </Callout.Root>
-                  ) : (
-                    <Flex direction="column" gap="2">
-                      {comments.map((comment) => (
-                        <Card key={comment.id} size="1" variant="surface">
-                          <Text as="p" size="2">
-                            {comment.body}
-                          </Text>
-                        </Card>
-                      ))}
-                    </Flex>
-                  )}
-                </Flex>
+        {selectedTask && (
+          <Stack component="section" aria-labelledby="task-detail-heading" spacing={2}>
+            <Divider />
+            <Typography variant="h5" component="h2" id="task-detail-heading" sx={{ fontWeight: 700 }}>
+              Task details
+            </Typography>
+            <TaskEditForm
+              // Remounting per version gives the form its values through
+              // defaultValues, which is the only point TanStack Form reads them.
+              key={`${selectedTask.id}-${selectedTask.version}`}
+              task={selectedTask}
+              saving={updateTaskMutation.isPending}
+              onSave={(values) => {
+                setActionForbidden(false)
+                updateTaskMutation.mutate(values)
+              }}
+              onDelete={() => setConfirmingDelete(true)}
+            />
 
-                <Flex direction="column" gap="3">
-                  <Heading as="h3" size="4">
-                    History
-                  </Heading>
-                  {auditQuery.isLoading ? (
-                    <Text as="p" size="2" color="gray" aria-live="polite">
-                      Loading history...
-                    </Text>
-                  ) : auditEvents.length === 0 ? (
-                    <Callout.Root color="gray" size="1">
-                      <Callout.Text>No history yet.</Callout.Text>
-                    </Callout.Root>
-                  ) : (
-                    <Flex direction="column" gap="1">
-                      {auditEvents.map((event) => (
-                        <Text as="p" key={event.id} size="2" color="gray">
-                          {event.action}
-                        </Text>
-                      ))}
-                    </Flex>
-                  )}
-                </Flex>
-              </section>
-            </Flex>
-          )}
+            {hasConflict && (
+              <Alert severity="warning">
+                This task has changed on the server.{' '}
+                <Link component="button" type="button" onClick={reloadSelectedTask}>
+                  Reload task
+                </Link>
+              </Alert>
+            )}
 
-          {actionForbidden && (
-            <Callout.Root color="red" role="alert">
-              <Callout.Icon>
-                <InfoCircledIcon />
-              </Callout.Icon>
-              <Callout.Text>You don't have permission to do that. Your role in this project is read-only.</Callout.Text>
-            </Callout.Root>
-          )}
-          <StatusMessage value={message} />
-          <Text as="p">
-            <Link asChild>
-              <RouterLink to="/dashboard">Back to dashboard</RouterLink>
-            </Link>
-          </Text>
-        </Flex>
+            <Stack spacing={1.5}>
+              <Typography variant="h6" component="h3" sx={{ fontWeight: 700 }}>
+                Comments
+              </Typography>
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  void commentForm.handleSubmit()
+                }}
+                noValidate
+              >
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', sm: 'flex-start' } }}>
+                  <commentForm.Field name="body">
+                    {(field) => (
+                      <TextField
+                        label="Comment"
+                        sx={{ flexGrow: 1, minWidth: '12rem' }}
+                        value={field.state.value}
+                        onChange={(event) => field.handleChange(event.target.value)}
+                        onBlur={field.handleBlur}
+                        error={field.state.meta.errors.length > 0}
+                        helperText={firstErrorMessage(field.state.meta.errors)}
+                        slotProps={{ htmlInput: { maxLength: 4000 }, formHelperText: { role: 'alert' } }}
+                      />
+                    )}
+                  </commentForm.Field>
+                  <Button type="submit" variant="contained" disabled={addCommentMutation.isPending}>
+                    Add comment
+                  </Button>
+                </Stack>
+              </form>
+              {commentsQuery.isLoading ? (
+                <Typography component="p" variant="body2" color="text.secondary" aria-live="polite">
+                  Loading comments...
+                </Typography>
+              ) : comments.length === 0 ? (
+                <Alert severity="info" role="status">
+                  No comments yet.
+                </Alert>
+              ) : (
+                <Stack spacing={1}>
+                  {comments.map((comment) => (
+                    <Card key={comment.id} variant="outlined">
+                      <CardContent sx={{ py: 1.5 }}>
+                        <Typography component="p" variant="body2">
+                          {comment.body}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </Stack>
+              )}
+            </Stack>
 
-        <AlertDialog.Root open={confirmingDelete} onOpenChange={setConfirmingDelete}>
-          <AlertDialog.Content maxWidth="26rem">
-            <AlertDialog.Title>Delete task</AlertDialog.Title>
-            <AlertDialog.Description>
-              Delete {selectedTask?.title}? This can't be undone.
-            </AlertDialog.Description>
-            <Flex gap="3" mt="4" justify="end">
-              <AlertDialog.Cancel>
-                <Button variant="soft" color="gray">
-                  Cancel
-                </Button>
-              </AlertDialog.Cancel>
-              <AlertDialog.Action>
-                <Button color="red" onClick={confirmDeleteSelectedTask}>
-                  Delete
-                </Button>
-              </AlertDialog.Action>
-            </Flex>
-          </AlertDialog.Content>
-        </AlertDialog.Root>
-      </main>
+            <Stack spacing={1.5}>
+              <Typography variant="h6" component="h3" sx={{ fontWeight: 700 }}>
+                History
+              </Typography>
+              {auditQuery.isLoading ? (
+                <Typography component="p" variant="body2" color="text.secondary" aria-live="polite">
+                  Loading history...
+                </Typography>
+              ) : auditEvents.length === 0 ? (
+                <Alert severity="info" role="status">
+                  No history yet.
+                </Alert>
+              ) : (
+                <Stack spacing={0.5}>
+                  {auditEvents.map((event) => (
+                    <Typography component="p" key={event.id} variant="body2" color="text.secondary">
+                      {event.action}
+                    </Typography>
+                  ))}
+                </Stack>
+              )}
+            </Stack>
+          </Stack>
+        )}
+
+        {actionForbidden && (
+          <Alert severity="error">You don't have permission to do that. Your role in this project is read-only.</Alert>
+        )}
+        <StatusMessage value={message} />
+        <Typography component="p">
+          <Link component={RouterLink} to="/dashboard">
+            Back to dashboard
+          </Link>
+        </Typography>
+      </Stack>
+
+      <Dialog
+        open={confirmingDelete}
+        onClose={() => setConfirmingDelete(false)}
+        slotProps={{ paper: { role: 'alertdialog', sx: { maxWidth: '26rem' } } }}
+        aria-labelledby="delete-task-title"
+        aria-describedby="delete-task-description"
+      >
+        <DialogTitle id="delete-task-title">Delete task</DialogTitle>
+        <DialogContent>
+          <DialogContentText id="delete-task-description">
+            Delete {selectedTask?.title}? This can't be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button color="inherit" onClick={() => setConfirmingDelete(false)}>
+            Cancel
+          </Button>
+          <Button color="error" variant="contained" onClick={confirmDeleteSelectedTask}>
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }

@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { queryKeys } from './queryKeys.ts'
 
 export type Profile = {
   id: string
@@ -12,5 +13,5 @@ export async function fetchProfile(): Promise<Profile | null> {
 }
 
 export function useProfile() {
-  return useQuery({ queryKey: ['auth', 'me'], queryFn: fetchProfile })
+  return useQuery({ queryKey: queryKeys.auth.me(), queryFn: fetchProfile })
 }

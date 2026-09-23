@@ -1,12 +1,21 @@
 import { useState } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
+import { useForm } from '@tanstack/react-form'
 import { z } from 'zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link as RouterLink } from 'react-router-dom'
-import { Box, Button, Callout, Card, Flex, Heading, Link, Select, Text, TextField } from '@radix-ui/themes'
-import { InfoCircledIcon } from '@radix-ui/react-icons'
+import Alert from '@mui/material/Alert'
+import Box from '@mui/material/Box'
+import Button from '@mui/material/Button'
+import Card from '@mui/material/Card'
+import CardContent from '@mui/material/CardContent'
+import Link from '@mui/material/Link'
+import MenuItem from '@mui/material/MenuItem'
+import Stack from '@mui/material/Stack'
+import TextField from '@mui/material/TextField'
+import Typography from '@mui/material/Typography'
 import { isForbidden, request } from '../lib/api.ts'
+import { firstErrorMessage } from '../lib/formError.ts'
+import { queryKeys } from '../lib/queryKeys.ts'
 import { Forbidden } from '../components/Forbidden.tsx'
 import { QueryError } from '../components/QueryError.tsx'
 import { StatusMessage, type StatusMessageValue } from '../components/StatusMessage.tsx'
@@ -48,28 +57,42 @@ export function DashboardPage() {
   const [actionForbidden, setActionForbidden] = useState(false)
   const queryClient = useQueryClient()
 
-  const workspacesQuery = useQuery({ queryKey: ['workspaces'], queryFn: fetchWorkspaces })
+  const workspacesQuery = useQuery({ queryKey: queryKeys.workspaces.all(), queryFn: fetchWorkspaces })
   const workspaces = workspacesQuery.data ?? []
   // Falls back to the first workspace until the user explicitly picks one, so a
   // freshly created (or freshly loaded) workspace is usable without an extra click.
   const activeWorkspace = selectedWorkspace || workspaces[0]?.id || ''
 
   const projectsQuery = useQuery({
-    queryKey: ['workspaces', activeWorkspace, 'projects'],
+    queryKey: queryKeys.workspaces.projects(activeWorkspace),
     queryFn: () => request(`/api/workspaces/${activeWorkspace}/projects`) as Promise<Project[]>,
     enabled: !!activeWorkspace,
   })
   const projects = projectsQuery.data ?? []
 
-  const workspaceForm = useForm<WorkspaceValues>({ resolver: zodResolver(workspaceSchema), defaultValues: { name: '' } })
-  const projectForm = useForm<ProjectValues>({ resolver: zodResolver(projectSchema), defaultValues: { name: '' } })
+  const workspaceForm = useForm({
+    defaultValues: { name: '' } as WorkspaceValues,
+    validators: { onSubmit: workspaceSchema },
+    onSubmit: ({ value }) => {
+      setActionForbidden(false)
+      createWorkspaceMutation.mutate(value)
+    },
+  })
+  const projectForm = useForm({
+    defaultValues: { name: '' } as ProjectValues,
+    validators: { onSubmit: projectSchema },
+    onSubmit: ({ value }) => {
+      setActionForbidden(false)
+      createProjectMutation.mutate(value)
+    },
+  })
 
   const createWorkspaceMutation = useMutation({
     mutationFn: (values: WorkspaceValues) =>
       request('/api/workspaces', { method: 'POST', body: JSON.stringify(values) }) as Promise<Workspace>,
     onSuccess: (workspace) => {
       workspaceForm.reset()
-      void queryClient.invalidateQueries({ queryKey: ['workspaces'] })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.workspaces.all() })
       setSelectedWorkspace(workspace.id)
       setMessage({ text: 'Workspace created', tone: 'success' })
     },
@@ -84,7 +107,7 @@ export function DashboardPage() {
       request(`/api/workspaces/${activeWorkspace}/projects`, { method: 'POST', body: JSON.stringify(values) }),
     onSuccess: () => {
       projectForm.reset()
-      void queryClient.invalidateQueries({ queryKey: ['workspaces', activeWorkspace, 'projects'] })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.workspaces.projects(activeWorkspace) })
       setMessage({ text: 'Project created', tone: 'success' })
     },
     onError: (error: unknown) => {
@@ -100,190 +123,165 @@ export function DashboardPage() {
 
   if (loading)
     return (
-      <Box asChild>
-        <main>
-          <Text aria-live="polite">Loading dashboard...</Text>
-        </main>
+      <Box component="main">
+        <Typography aria-live="polite">Loading dashboard...</Typography>
       </Box>
     )
   if (forbidden) return <Forbidden message="You don't have access to this dashboard." />
   if (workspacesFailed)
     return (
-      <Box asChild>
-        <main>
-          <QueryError message="We couldn't load your workspaces." onRetry={() => void workspacesQuery.refetch()} />
-        </main>
+      <Box component="main">
+        <QueryError message="We couldn't load your workspaces." onRetry={() => void workspacesQuery.refetch()} />
       </Box>
     )
 
   return (
-    <Box asChild>
-      <main>
-        <Flex direction="column" gap="6">
-          <Flex direction="column" gap="3">
-            <Text size="1" color="iris" weight="bold" style={{ letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-              TeamFlow workspace
-            </Text>
-            <Heading as="h1" size="8">
-              Project dashboard
-            </Heading>
-            <Text as="p" color="gray">
-              Create a workspace, then give it a project to hold future tasks.
-            </Text>
-          </Flex>
+    <Box component="main">
+      <Stack spacing={4}>
+        <Stack spacing={1.5}>
+          <Typography variant="overline" color="primary.main" sx={{ fontWeight: 700, letterSpacing: '0.08em' }}>
+            TeamFlow workspace
+          </Typography>
+          <Typography variant="h3" component="h1" sx={{ fontWeight: 700 }}>
+            Project dashboard
+          </Typography>
+          <Typography component="p" color="text.secondary">
+            Create a workspace, then give it a project to hold future tasks.
+          </Typography>
+        </Stack>
 
-          <Card size="3">
+        <Card>
+          <CardContent>
             <form
-              onSubmit={workspaceForm.handleSubmit((values) => {
-                setActionForbidden(false)
-                createWorkspaceMutation.mutate(values)
-              })}
+              onSubmit={(event) => {
+                event.preventDefault()
+                void workspaceForm.handleSubmit()
+              }}
               noValidate
             >
-              <Flex direction={{ initial: 'column', sm: 'row' }} align={{ initial: 'stretch', sm: 'end' }} gap="3" wrap="wrap">
-                <Flex asChild direction="column" gap="1" flexGrow="1" minWidth="12rem">
-                  <label>
-                    <Text weight="medium" size="2">
-                      New workspace
-                    </Text>
-                    <TextField.Root
-                      {...workspaceForm.register('name')}
-                      maxLength={120}
-                      aria-invalid={!!workspaceForm.formState.errors.name}
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', sm: 'flex-start' } }}>
+                <workspaceForm.Field name="name">
+                  {(field) => (
+                    <TextField
+                      label="New workspace"
+                      fullWidth
+                      value={field.state.value}
+                      onChange={(event) => field.handleChange(event.target.value)}
+                      onBlur={field.handleBlur}
+                      error={field.state.meta.errors.length > 0}
+                      helperText={firstErrorMessage(field.state.meta.errors)}
+                      slotProps={{ htmlInput: { maxLength: 120 }, formHelperText: { role: 'alert' } }}
                     />
-                    {workspaceForm.formState.errors.name && (
-                      <Text role="alert" color="red" size="1">
-                        {workspaceForm.formState.errors.name.message}
-                      </Text>
-                    )}
-                  </label>
-                </Flex>
-                <Button type="submit" disabled={createWorkspaceMutation.isPending}>
+                  )}
+                </workspaceForm.Field>
+                <Button type="submit" variant="contained" disabled={createWorkspaceMutation.isPending}>
                   Create workspace
                 </Button>
-              </Flex>
+              </Stack>
             </form>
-          </Card>
+          </CardContent>
+        </Card>
 
-          {workspaces.length === 0 ? (
-            <Callout.Root color="gray">
-              <Callout.Icon>
-                <InfoCircledIcon />
-              </Callout.Icon>
-              <Callout.Text>No workspaces yet.</Callout.Text>
-            </Callout.Root>
-          ) : (
-            <>
-              <Flex asChild direction="column" gap="1" maxWidth="20rem">
-                <label>
-                  <Text weight="medium" size="2">
-                    Workspace
-                  </Text>
-                  <Select.Root value={activeWorkspace} onValueChange={setSelectedWorkspace}>
-                    <Select.Trigger aria-label="Workspace" />
-                    <Select.Content>
-                      {workspaces.map((workspace) => (
-                        <Select.Item key={workspace.id} value={workspace.id}>
-                          {workspace.name} ({workspace.myRole})
-                        </Select.Item>
-                      ))}
-                    </Select.Content>
-                  </Select.Root>
-                </label>
-              </Flex>
+        {workspaces.length === 0 ? (
+          <Alert severity="info" role="status">No workspaces yet.</Alert>
+        ) : (
+          <>
+            <TextField
+              select
+              label="Workspace"
+              value={activeWorkspace}
+              onChange={(event) => setSelectedWorkspace(event.target.value)}
+              sx={{ maxWidth: '20rem' }}
+            >
+              {workspaces.map((workspace) => (
+                <MenuItem key={workspace.id} value={workspace.id}>
+                  {workspace.name} ({workspace.myRole})
+                </MenuItem>
+              ))}
+            </TextField>
 
-              <Card size="3">
+            <Card>
+              <CardContent>
                 <form
-                  onSubmit={projectForm.handleSubmit((values) => {
-                    setActionForbidden(false)
-                    createProjectMutation.mutate(values)
-                  })}
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    void projectForm.handleSubmit()
+                  }}
                   noValidate
                 >
-                  <Flex direction={{ initial: 'column', sm: 'row' }} align={{ initial: 'stretch', sm: 'end' }} gap="3" wrap="wrap">
-                    <Flex asChild direction="column" gap="1" flexGrow="1" minWidth="12rem">
-                      <label>
-                        <Text weight="medium" size="2">
-                          New project
-                        </Text>
-                        <TextField.Root
-                          {...projectForm.register('name')}
-                          maxLength={120}
-                          aria-invalid={!!projectForm.formState.errors.name}
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', sm: 'flex-start' } }}>
+                    <projectForm.Field name="name">
+                      {(field) => (
+                        <TextField
+                          label="New project"
+                          fullWidth
+                          value={field.state.value}
+                          onChange={(event) => field.handleChange(event.target.value)}
+                          onBlur={field.handleBlur}
+                          error={field.state.meta.errors.length > 0}
+                          helperText={firstErrorMessage(field.state.meta.errors)}
+                          slotProps={{ htmlInput: { maxLength: 120 }, formHelperText: { role: 'alert' } }}
                         />
-                        {projectForm.formState.errors.name && (
-                          <Text role="alert" color="red" size="1">
-                            {projectForm.formState.errors.name.message}
-                          </Text>
-                        )}
-                      </label>
-                    </Flex>
-                    <Button type="submit" disabled={createProjectMutation.isPending}>
+                      )}
+                    </projectForm.Field>
+                    <Button type="submit" variant="contained" disabled={createProjectMutation.isPending}>
                       Create project
                     </Button>
-                  </Flex>
+                  </Stack>
                 </form>
-              </Card>
+              </CardContent>
+            </Card>
 
-              <Flex direction="column" gap="3" asChild>
-                <section aria-labelledby="projects-heading">
-                  <Heading as="h2" size="5" id="projects-heading">
-                    Projects
-                  </Heading>
-                  {projectsFailed ? (
-                    <QueryError message="We couldn't load projects for this workspace." onRetry={() => void projectsQuery.refetch()} />
-                  ) : projects.length === 0 ? (
-                    <Callout.Root color="gray">
-                      <Callout.Icon>
-                        <InfoCircledIcon />
-                      </Callout.Icon>
-                      <Callout.Text>No projects in this workspace yet.</Callout.Text>
-                    </Callout.Root>
-                  ) : (
-                    <Flex direction="column" gap="3">
-                      {projects.map((project) => (
-                        <Card key={project.id}>
-                          <Flex justify="between" align="center" gap="3" wrap="wrap">
-                            <Flex direction="column">
-                              <Text weight="bold">{project.name}</Text>
-                              <Text color="gray" size="2">
-                                {project.description ?? 'Ready for tasks'}
-                              </Text>
-                            </Flex>
-                            <Link asChild>
-                              <RouterLink to={`/projects/${project.id}/tasks`} aria-label={`Open task board for ${project.name}`}>
-                                Open task board
-                              </RouterLink>
-                            </Link>
-                          </Flex>
-                        </Card>
-                      ))}
-                    </Flex>
-                  )}
-                </section>
-              </Flex>
+            <Stack component="section" aria-labelledby="projects-heading" spacing={1.5}>
+              <Typography variant="h5" component="h2" id="projects-heading" sx={{ fontWeight: 700 }}>
+                Projects
+              </Typography>
+              {projectsFailed ? (
+                <QueryError message="We couldn't load projects for this workspace." onRetry={() => void projectsQuery.refetch()} />
+              ) : projects.length === 0 ? (
+                <Alert severity="info" role="status">No projects in this workspace yet.</Alert>
+              ) : (
+                <Stack spacing={1.5}>
+                  {projects.map((project) => (
+                    <Card key={project.id}>
+                      <CardContent>
+                        <Stack direction="row" spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
+                          <Stack>
+                            <Typography sx={{ fontWeight: 700 }}>{project.name}</Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              {project.description ?? 'Ready for tasks'}
+                            </Typography>
+                          </Stack>
+                          <Link
+                            component={RouterLink}
+                            to={`/projects/${project.id}/tasks`}
+                            aria-label={`Open task board for ${project.name}`}
+                          >
+                            Open task board
+                          </Link>
+                        </Stack>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </Stack>
+              )}
+            </Stack>
 
-              <Text as="p">
-                <Link asChild>
-                  <RouterLink to={`/workspaces/${activeWorkspace}/members`}>Manage members</RouterLink>
-                </Link>
-              </Text>
-            </>
-          )}
+            <Typography component="p">
+              <Link component={RouterLink} to={`/workspaces/${activeWorkspace}/members`}>
+                Manage members
+              </Link>
+            </Typography>
+          </>
+        )}
 
-          {actionForbidden && (
-            <Callout.Root color="red" role="alert">
-              <Callout.Icon>
-                <InfoCircledIcon />
-              </Callout.Icon>
-              <Callout.Text>
-                You don't have permission to do that. This action requires a higher role in this workspace.
-              </Callout.Text>
-            </Callout.Root>
-          )}
-          <StatusMessage value={message} />
-        </Flex>
-      </main>
+        {actionForbidden && (
+          <Alert severity="error">
+            You don't have permission to do that. This action requires a higher role in this workspace.
+          </Alert>
+        )}
+        <StatusMessage value={message} />
+      </Stack>
     </Box>
   )
 }

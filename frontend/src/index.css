@@ -1,60 +1,6 @@
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-}
-
+/* Resets beyond MUI's CssBaseline. The header and navigation styling that
+   used to live here moved into AppShell's `sx`, so it reads from the MUI
+   theme instead of Radix's CSS custom properties. */
 #root {
   min-height: 100vh;
-}
-
-.app-header {
-  border-bottom: 1px solid var(--gray-a5);
-  background-color: var(--color-panel-translucent);
-  transition: transform 0.25s ease;
-}
-
-.app-header-hidden {
-  transform: translateY(-100%);
-}
-
-.app-header-inner {
-  padding-block: var(--space-3);
-}
-
-.brand-link {
-  color: var(--gray-12);
-  text-decoration: none;
-}
-
-.brand-link:hover {
-  color: var(--accent-11);
-}
-
-.nav-link {
-  color: var(--gray-11);
-  text-decoration: none;
-  font-size: var(--font-size-2);
-  font-weight: 500;
-  padding-block: var(--space-1);
-  border-bottom: 2px solid transparent;
-}
-
-.nav-link:hover {
-  color: var(--gray-12);
-}
-
-.nav-link-active {
-  color: var(--accent-11);
-  border-bottom-color: var(--accent-9);
-}
-
-/* Matches the Radix Themes `sm` breakpoint (768px) used for responsive
-   props elsewhere, so the header and form layouts adapt at the same width. */
-@media (max-width: 767px) {
-  .app-header-inner {
-    padding-block: var(--space-2);
-  }
 }

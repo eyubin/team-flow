@@ -1,26 +1,28 @@
 import { useState } from 'react'
 import { Link as RouterLink, useParams } from 'react-router-dom'
-import { Controller, useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
+import { useForm } from '@tanstack/react-form'
 import { z } from 'zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  AlertDialog,
-  Badge,
-  Box,
-  Button,
-  Callout,
-  Card,
-  Flex,
-  Heading,
-  Link,
-  Select,
-  Table,
-  Text,
-  TextField,
-} from '@radix-ui/themes'
-import { InfoCircledIcon } from '@radix-ui/react-icons'
+import { DataGrid, type GridColDef } from '@mui/x-data-grid'
+import Alert from '@mui/material/Alert'
+import Chip from '@mui/material/Chip'
+import Box from '@mui/material/Box'
+import Button from '@mui/material/Button'
+import Card from '@mui/material/Card'
+import CardContent from '@mui/material/CardContent'
+import Dialog from '@mui/material/Dialog'
+import DialogActions from '@mui/material/DialogActions'
+import DialogContent from '@mui/material/DialogContent'
+import DialogContentText from '@mui/material/DialogContentText'
+import DialogTitle from '@mui/material/DialogTitle'
+import Link from '@mui/material/Link'
+import MenuItem from '@mui/material/MenuItem'
+import Stack from '@mui/material/Stack'
+import TextField from '@mui/material/TextField'
+import Typography from '@mui/material/Typography'
 import { isForbidden, request } from '../lib/api.ts'
+import { firstErrorMessage } from '../lib/formError.ts'
+import { queryKeys } from '../lib/queryKeys.ts'
 import { Forbidden } from '../components/Forbidden.tsx'
 import { QueryError } from '../components/QueryError.tsx'
 import { StatusMessage, type StatusMessageValue } from '../components/StatusMessage.tsx'
@@ -46,10 +48,10 @@ const memberSchema = z.object({
 
 type MemberValues = z.infer<typeof memberSchema>
 
-const ROLE_BADGE_COLOR: Record<Member['role'], 'iris' | 'gray' | 'amber'> = {
-  ADMIN: 'iris',
-  MEMBER: 'gray',
-  VIEWER: 'amber',
+const ROLE_CHIP_COLOR: Record<Member['role'], 'primary' | 'default' | 'warning'> = {
+  ADMIN: 'primary',
+  MEMBER: 'default',
+  VIEWER: 'warning',
 }
 
 async function fetchWorkspaces() {
@@ -65,24 +67,31 @@ export function MembersPage() {
   const [memberPendingRemoval, setMemberPendingRemoval] = useState<Member | null>(null)
   const queryClient = useQueryClient()
 
-  const workspacesQuery = useQuery({ queryKey: ['workspaces'], queryFn: fetchWorkspaces })
+  const workspacesQuery = useQuery({ queryKey: queryKeys.workspaces.all(), queryFn: fetchWorkspaces })
   const workspace = workspacesQuery.data?.find((item) => item.id === workspaceId)
 
   const membersQuery = useQuery({
-    queryKey: ['workspaces', workspaceId, 'members'],
+    queryKey: queryKeys.workspaces.members(workspaceId!),
     queryFn: () => request(`/api/workspaces/${workspaceId}/members`) as Promise<Member[]>,
     enabled: !!workspaceId,
   })
   const members = membersQuery.data ?? []
 
-  const memberForm = useForm<MemberValues>({ resolver: zodResolver(memberSchema), defaultValues: { email: '', role: 'MEMBER' } })
+  const memberForm = useForm({
+    defaultValues: { email: '', role: 'MEMBER' } as MemberValues,
+    validators: { onSubmit: memberSchema },
+    onSubmit: ({ value }) => {
+      setActionForbidden(false)
+      addMemberMutation.mutate(value)
+    },
+  })
 
   const addMemberMutation = useMutation({
     mutationFn: (values: MemberValues) =>
       request(`/api/workspaces/${workspaceId}/members`, { method: 'POST', body: JSON.stringify(values) }),
     onSuccess: () => {
       memberForm.reset()
-      void queryClient.invalidateQueries({ queryKey: ['workspaces', workspaceId, 'members'] })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.workspaces.members(workspaceId!) })
       setMessage({ text: 'Member added', tone: 'success' })
     },
     onError: (error: unknown) => {
@@ -95,7 +104,7 @@ export function MembersPage() {
     mutationFn: ({ member, role }: { member: Member; role: Member['role'] }) =>
       request(`/api/workspaces/${workspaceId}/members/${member.userId}`, { method: 'PATCH', body: JSON.stringify({ role }) }),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['workspaces', workspaceId, 'members'] })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.workspaces.members(workspaceId!) })
       setMessage({ text: 'Member role updated', tone: 'success' })
     },
     onError: (error: unknown) => {
@@ -108,7 +117,7 @@ export function MembersPage() {
     mutationFn: (member: Member) =>
       request(`/api/workspaces/${workspaceId}/members/${member.userId}`, { method: 'DELETE' }),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['workspaces', workspaceId, 'members'] })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.workspaces.members(workspaceId!) })
       setMessage({ text: 'Member removed', tone: 'success' })
     },
     onError: (error: unknown) => {
@@ -137,211 +146,211 @@ export function MembersPage() {
 
   if (loading)
     return (
-      <Box asChild>
-        <main>
-          <Text aria-live="polite">Loading members...</Text>
-        </main>
+      <Box component="main">
+        <Typography aria-live="polite">Loading members...</Typography>
       </Box>
     )
   if (forbidden) return <Forbidden message="You don't have access to this workspace's members." />
   if (failed)
     return (
-      <Box asChild>
-        <main>
-          <QueryError
-            message="We couldn't load this workspace's members."
-            onRetry={() => {
-              void workspacesQuery.refetch()
-              void membersQuery.refetch()
-            }}
-          />
-        </main>
+      <Box component="main">
+        <QueryError
+          message="We couldn't load this workspace's members."
+          onRetry={() => {
+            void workspacesQuery.refetch()
+            void membersQuery.refetch()
+          }}
+        />
       </Box>
     )
 
   const myRole = workspace?.myRole
 
+  const columns: GridColDef<Member>[] = [
+    {
+      field: 'displayName',
+      headerName: 'Member',
+      flex: 1,
+      minWidth: 200,
+      sortable: true,
+      renderCell: ({ row }) => (
+        <Stack sx={{ justifyContent: 'center', height: '100%' }}>
+          <Typography sx={{ fontWeight: 700 }}>{row.displayName}</Typography>
+          <Typography variant="caption" color="text.secondary">
+            {row.email}
+          </Typography>
+        </Stack>
+      ),
+    },
+    {
+      field: 'role',
+      headerName: 'Role',
+      width: 180,
+      sortable: true,
+      renderCell: ({ row }) =>
+        myRole === 'ADMIN' ? (
+          <TextField
+            select
+            size="small"
+            value={row.role}
+            onChange={(event) => changeRole(row, event.target.value as Member['role'])}
+            slotProps={{ select: { 'aria-label': `Role for ${row.displayName}` } }}
+            sx={{ my: 1.5 }}
+          >
+            <MenuItem value="ADMIN">Admin</MenuItem>
+            <MenuItem value="MEMBER">Member</MenuItem>
+            <MenuItem value="VIEWER">Viewer</MenuItem>
+          </TextField>
+        ) : (
+          <Chip size="small" color={ROLE_CHIP_COLOR[row.role]} label={row.role} />
+        ),
+    },
+    ...(myRole === 'ADMIN'
+      ? [
+          {
+            field: 'actions',
+            headerName: '',
+            width: 120,
+            sortable: false,
+            renderCell: ({ row }: { row: Member }) => (
+              <Button
+                type="button"
+                color="error"
+                variant="outlined"
+                size="small"
+                onClick={() => setMemberPendingRemoval(row)}
+              >
+                Remove
+              </Button>
+            ),
+          } satisfies GridColDef<Member>,
+        ]
+      : []),
+  ]
+
   return (
-    <Box asChild>
-      <main>
-        <Flex direction="column" gap="6">
-          <Flex direction="column" gap="3">
-            <Text size="1" color="iris" weight="bold" style={{ letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-              TeamFlow workspace
-            </Text>
-            <Heading as="h1" size="8">
-              Members{workspace ? ` – ${workspace.name}` : ''}
-            </Heading>
-          </Flex>
+    <Box component="main">
+      <Stack spacing={4}>
+        <Stack spacing={1.5}>
+          <Typography variant="overline" color="primary.main" sx={{ fontWeight: 700, letterSpacing: '0.08em' }}>
+            TeamFlow workspace
+          </Typography>
+          <Typography variant="h3" component="h1" sx={{ fontWeight: 700 }}>
+            Members{workspace ? ` – ${workspace.name}` : ''}
+          </Typography>
+        </Stack>
 
-          <Flex direction="column" gap="3" asChild>
-            <section aria-labelledby="members-heading">
-              <Heading as="h2" size="5" id="members-heading">
-                Members
-              </Heading>
-              {members.length === 0 ? (
-                <Callout.Root color="gray">
-                  <Callout.Icon>
-                    <InfoCircledIcon />
-                  </Callout.Icon>
-                  <Callout.Text>No members found.</Callout.Text>
-                </Callout.Root>
-              ) : (
-                <Box overflowX="auto">
-                  <Table.Root variant="surface">
-                    <Table.Header>
-                      <Table.Row>
-                        <Table.ColumnHeaderCell>Member</Table.ColumnHeaderCell>
-                        <Table.ColumnHeaderCell>Role</Table.ColumnHeaderCell>
-                        {myRole === 'ADMIN' && <Table.ColumnHeaderCell></Table.ColumnHeaderCell>}
-                      </Table.Row>
-                    </Table.Header>
-                    <Table.Body>
-                      {members.map((member) => (
-                        <Table.Row key={member.userId}>
-                          <Table.RowHeaderCell>
-                            <Flex direction="column">
-                              <Text weight="bold">{member.displayName}</Text>
-                              <Text color="gray" size="1">
-                                {member.email}
-                              </Text>
-                            </Flex>
-                          </Table.RowHeaderCell>
-                          <Table.Cell>
-                            {myRole === 'ADMIN' ? (
-                              <Select.Root
-                                value={member.role}
-                                onValueChange={(value) => changeRole(member, value as Member['role'])}
-                              >
-                                <Select.Trigger aria-label={`Role for ${member.displayName}`} />
-                                <Select.Content>
-                                  <Select.Item value="ADMIN">Admin</Select.Item>
-                                  <Select.Item value="MEMBER">Member</Select.Item>
-                                  <Select.Item value="VIEWER">Viewer</Select.Item>
-                                </Select.Content>
-                              </Select.Root>
-                            ) : (
-                              <Badge color={ROLE_BADGE_COLOR[member.role]} variant="soft">
-                                {member.role}
-                              </Badge>
-                            )}
-                          </Table.Cell>
-                          {myRole === 'ADMIN' && (
-                            <Table.Cell>
-                              <Button
-                                type="button"
-                                color="red"
-                                variant="soft"
-                                size="1"
-                                onClick={() => setMemberPendingRemoval(member)}
-                              >
-                                Remove
-                              </Button>
-                            </Table.Cell>
-                          )}
-                        </Table.Row>
-                      ))}
-                    </Table.Body>
-                  </Table.Root>
-                </Box>
-              )}
-              {myRole === 'ADMIN' && (
-                <Card size="3">
-                  <form
-                    onSubmit={memberForm.handleSubmit((values) => {
-                      setActionForbidden(false)
-                      addMemberMutation.mutate(values)
-                    })}
-                    noValidate
-                  >
-                    <Flex direction={{ initial: 'column', sm: 'row' }} align={{ initial: 'stretch', sm: 'end' }} gap="3" wrap="wrap">
-                      <Flex asChild direction="column" gap="1" flexGrow="1" minWidth="12rem">
-                        <label>
-                          <Text weight="medium" size="2">
-                            Email
-                          </Text>
-                          <TextField.Root
-                            type="email"
-                            {...memberForm.register('email')}
-                            aria-invalid={!!memberForm.formState.errors.email}
-                          />
-                          {memberForm.formState.errors.email && (
-                            <Text role="alert" color="red" size="1">
-                              {memberForm.formState.errors.email.message}
-                            </Text>
-                          )}
-                        </label>
-                      </Flex>
-                      <Flex asChild direction="column" gap="1">
-                        <label>
-                          <Text weight="medium" size="2">
-                            Role
-                          </Text>
-                          <Controller
-                            name="role"
-                            control={memberForm.control}
-                            render={({ field }) => (
-                              <Select.Root value={field.value} onValueChange={field.onChange}>
-                                <Select.Trigger aria-label="Role" />
-                                <Select.Content>
-                                  <Select.Item value="MEMBER">Member</Select.Item>
-                                  <Select.Item value="VIEWER">Viewer</Select.Item>
-                                  <Select.Item value="ADMIN">Admin</Select.Item>
-                                </Select.Content>
-                              </Select.Root>
-                            )}
-                          />
-                        </label>
-                      </Flex>
-                      <Button type="submit" disabled={addMemberMutation.isPending}>
-                        Add member
-                      </Button>
-                    </Flex>
-                  </form>
-                </Card>
-              )}
-            </section>
-          </Flex>
-
-          {actionForbidden && (
-            <Callout.Root color="red" role="alert">
-              <Callout.Icon>
-                <InfoCircledIcon />
-              </Callout.Icon>
-              <Callout.Text>
-                You don't have permission to do that. This action requires a higher role in this workspace.
-              </Callout.Text>
-            </Callout.Root>
+        <Stack component="section" aria-labelledby="members-heading" spacing={1.5}>
+          <Typography variant="h5" component="h2" id="members-heading" sx={{ fontWeight: 700 }}>
+            Members
+          </Typography>
+          {members.length === 0 ? (
+            <Alert severity="info" role="status">
+              No members found.
+            </Alert>
+          ) : (
+            <DataGrid
+              rows={members}
+              columns={columns}
+              getRowId={(row: Member) => row.userId}
+              getRowHeight={() => 64}
+              autoHeight
+              hideFooter
+              disableColumnMenu
+              disableRowSelectionOnClick
+              // Workspace member lists are small, and turning virtualisation off
+              // keeps every row in the DOM for assistive tech and for tests.
+              disableVirtualization
+              aria-label="Workspace members"
+            />
           )}
-          <StatusMessage value={message} />
-          <Text as="p">
-            <Link asChild>
-              <RouterLink to="/dashboard">Back to dashboard</RouterLink>
-            </Link>
-          </Text>
-        </Flex>
+          {myRole === 'ADMIN' && (
+            <Card>
+              <CardContent>
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    void memberForm.handleSubmit()
+                  }}
+                  noValidate
+                >
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', sm: 'flex-start' } }}>
+                    <memberForm.Field name="email">
+                      {(field) => (
+                        <TextField
+                          label="Email"
+                          type="email"
+                          fullWidth
+                          value={field.state.value}
+                          onChange={(event) => field.handleChange(event.target.value)}
+                          onBlur={field.handleBlur}
+                          error={field.state.meta.errors.length > 0}
+                          helperText={firstErrorMessage(field.state.meta.errors)}
+                          slotProps={{ formHelperText: { role: 'alert' } }}
+                        />
+                      )}
+                    </memberForm.Field>
+                    <memberForm.Field name="role">
+                      {(field) => (
+                        <TextField
+                          select
+                          label="Role"
+                          sx={{ minWidth: '10rem' }}
+                          value={field.state.value}
+                          onChange={(event) => field.handleChange(event.target.value as MemberValues['role'])}
+                          onBlur={field.handleBlur}
+                        >
+                          <MenuItem value="MEMBER">Member</MenuItem>
+                          <MenuItem value="VIEWER">Viewer</MenuItem>
+                          <MenuItem value="ADMIN">Admin</MenuItem>
+                        </TextField>
+                      )}
+                    </memberForm.Field>
+                    <Button type="submit" variant="contained" disabled={addMemberMutation.isPending}>
+                      Add member
+                    </Button>
+                  </Stack>
+                </form>
+              </CardContent>
+            </Card>
+          )}
+        </Stack>
 
-        <AlertDialog.Root open={!!memberPendingRemoval} onOpenChange={(open) => !open && setMemberPendingRemoval(null)}>
-          <AlertDialog.Content maxWidth="26rem">
-            <AlertDialog.Title>Remove member</AlertDialog.Title>
-            <AlertDialog.Description>
-              Remove {memberPendingRemoval?.displayName} from this workspace? They will lose access immediately.
-            </AlertDialog.Description>
-            <Flex gap="3" mt="4" justify="end">
-              <AlertDialog.Cancel>
-                <Button variant="soft" color="gray">
-                  Cancel
-                </Button>
-              </AlertDialog.Cancel>
-              <AlertDialog.Action>
-                <Button color="red" onClick={confirmRemoveMember}>
-                  Remove
-                </Button>
-              </AlertDialog.Action>
-            </Flex>
-          </AlertDialog.Content>
-        </AlertDialog.Root>
-      </main>
+        {actionForbidden && (
+          <Alert severity="error">
+            You don't have permission to do that. This action requires a higher role in this workspace.
+          </Alert>
+        )}
+        <StatusMessage value={message} />
+        <Typography component="p">
+          <Link component={RouterLink} to="/dashboard">
+            Back to dashboard
+          </Link>
+        </Typography>
+      </Stack>
+
+      <Dialog
+        open={!!memberPendingRemoval}
+        onClose={() => setMemberPendingRemoval(null)}
+        slotProps={{ paper: { role: 'alertdialog', sx: { maxWidth: '26rem' } } }}
+        aria-labelledby="remove-member-title"
+        aria-describedby="remove-member-description"
+      >
+        <DialogTitle id="remove-member-title">Remove member</DialogTitle>
+        <DialogContent>
+          <DialogContentText id="remove-member-description">
+            Remove {memberPendingRemoval?.displayName} from this workspace? They will lose access immediately.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button color="inherit" onClick={() => setMemberPendingRemoval(null)}>
+            Cancel
+          </Button>
+          <Button color="error" variant="contained" onClick={confirmRemoveMember}>
+            Remove
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }

@@ -1,4 +1,4 @@
-import { Text } from '@radix-ui/themes'
+import Typography from '@mui/material/Typography'
 
 export type MessageTone = 'neutral' | 'success' | 'error'
 export type StatusMessageValue = { text: string; tone: MessageTone } | null
@@ -14,14 +14,14 @@ export type StatusMessageValue = { text: string; tone: MessageTone } | null
 export function StatusMessage({ value }: { value: StatusMessageValue }) {
   const tone = value?.tone ?? 'neutral'
   return (
-    <Text
+    <Typography
       aria-live="polite"
-      as="p"
-      color={tone === 'error' ? 'red' : tone === 'success' ? 'grass' : 'gray'}
-      weight={tone === 'error' ? 'medium' : undefined}
-      size="2"
+      component="p"
+      variant="body2"
+      color={tone === 'error' ? 'error.main' : tone === 'success' ? 'success.main' : 'text.secondary'}
+      sx={{ fontWeight: tone === 'error' ? 500 : undefined }}
     >
       {value?.text ?? ''}
-    </Text>
+    </Typography>
   )
 }

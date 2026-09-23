@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Theme } from '@radix-ui/themes'
+import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles'
+import CssBaseline from '@mui/material/CssBaseline'
+import { createAppTheme } from '../../theme/muiTheme.ts'
 import { ThemeContext } from './theme-context.ts'
 import type { ThemePreference } from './theme-context.ts'
 
@@ -35,12 +37,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const appearance = preference === 'system' ? (systemDark ? 'dark' : 'light') : preference
 
   const value = useMemo(() => ({ preference, appearance, setPreference }), [preference, appearance, setPreference])
+  const muiTheme = useMemo(() => createAppTheme(appearance), [appearance])
 
   return (
     <ThemeContext.Provider value={value}>
-      <Theme accentColor="iris" grayColor="slate" radius="large" appearance={appearance} panelBackground="solid">
+      <MuiThemeProvider theme={muiTheme}>
+        <CssBaseline />
         {children}
-      </Theme>
+      </MuiThemeProvider>
     </ThemeContext.Provider>
   )
 }

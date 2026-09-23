@@ -1,13 +1,13 @@
 import { expect, test } from '@playwright/test'
-import { createWorkspaceAndProject, csrfHeader, getTaskByTitle, registerNewUser } from './helpers.ts'
+import { chooseOption, createWorkspaceAndProject, csrfHeader, getTaskByTitle, registerNewUser } from './helpers.ts'
 
 test('shows a conflict when the task changed elsewhere first', async ({ page }) => {
   await registerNewUser(page, 'conflict')
   const { projectId } = await createWorkspaceAndProject(page, 'Conflict')
 
   await page.getByLabel('New task').fill('Racing edits')
-  await page.getByLabel('Status', { exact: true }).selectOption('TODO')
-  await page.getByLabel('Priority', { exact: true }).selectOption('MEDIUM')
+  await chooseOption(page, 'Status', 'To do')
+  await chooseOption(page, 'Priority', 'Medium')
   await page.getByRole('button', { name: 'Create task' }).click()
   await expect(page.getByRole('button', { name: /Racing edits/ })).toBeVisible()
 
