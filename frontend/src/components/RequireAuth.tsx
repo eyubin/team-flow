@@ -19,7 +19,9 @@ export function RequireAuth() {
   // A network failure here is not the same as "not signed in" - redirecting
   // to the login page would sign out a legitimately authenticated user just
   // because a request dropped. Offer a retry instead.
-  if (profileQuery.isError) {
+  // Only when there's no profile at all: a failed background re-check (on
+  // window focus) keeps showing the page the user was already on.
+  if (profileQuery.isError && profileQuery.data === undefined) {
     return (
       <Box component="main">
         <QueryError

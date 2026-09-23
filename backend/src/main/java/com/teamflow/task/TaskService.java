@@ -1,6 +1,7 @@
 package com.teamflow.task;
 
 import com.teamflow.audit.AuditService;
+import com.teamflow.auth.UserDeletedEvent;
 import com.teamflow.workspace.Project;
 import com.teamflow.workspace.ProjectRepository;
 import com.teamflow.workspace.Role;
@@ -15,6 +16,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.context.event.EventListener;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,6 +48,13 @@ public class TaskService {
         Task saved = tasks.save(task);
         audit.record(userId, "TASK_CREATED", "TASK", saved.getId(), Map.of("projectId", projectId.toString()));
         return TaskResponses.TaskResponse.from(saved);
+    }
+
+    /** Runs inside the account-deletion transaction; a deleted user can't be anyone's assignee. */
+    @EventListener
+    @Transactional
+    public void onUserDeleted(UserDeletedEvent event) {
+        tasks.unassignAll(event.userId(), java.time.Instant.now());
     }
 
     @Transactional(readOnly = true)

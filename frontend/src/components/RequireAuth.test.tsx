@@ -52,4 +52,14 @@ describe('RequireAuth', () => {
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Sign in page' })).not.toBeInTheDocument()
   })
+
+  // Only a 401 means signed out; a failing server must not end the session.
+  it('offers a retry instead of redirecting when the session check errors', async () => {
+    server.use(http.get('/api/auth/me', () => new HttpResponse(null, { status: 503 })))
+
+    renderGuardedRoute()
+
+    expect(await screen.findByRole('alert')).toHaveTextContent("We couldn't verify your session.")
+    expect(screen.queryByRole('heading', { name: 'Sign in page' })).not.toBeInTheDocument()
+  })
 })

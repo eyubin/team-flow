@@ -40,6 +40,10 @@ export const handlers = [
   http.post('/api/auth/login', () => HttpResponse.json(profile)),
   http.post('/api/auth/register', () => HttpResponse.json(profile, { status: 201 })),
   http.post('/api/auth/logout', () => new HttpResponse(null, { status: 204 })),
+  http.get('/api/users/me', () => HttpResponse.json(profile)),
+  http.patch('/api/users/me', () => HttpResponse.json(profile)),
+  http.put('/api/users/me/password', () => new HttpResponse(null, { status: 204 })),
+  http.delete('/api/users/me', () => new HttpResponse(null, { status: 204 })),
 
   http.get('/api/workspaces', () => HttpResponse.json([])),
   http.post('/api/workspaces', () => HttpResponse.json(workspace, { status: 201 })),

@@ -17,6 +17,7 @@ security:
 
 tags:
   - name: auth
+  - name: account
   - name: workspaces
   - name: members
   - name: projects
@@ -111,6 +112,84 @@ paths:
               schema:
                 $ref: "#/components/schemas/UserProfile"
         "401":
+          $ref: "#/components/responses/Problem"
+
+  /api/users/me:
+    get:
+      tags: [account]
+      summary: Current user's account
+      operationId: getAccount
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "401":
+          $ref: "#/components/responses/Problem"
+    patch:
+      tags: [account]
+      summary: Update display name and/or email (email change requires currentPassword)
+      operationId: updateAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAccountRequest"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+    delete:
+      tags: [account]
+      summary: Delete own account (soft delete + anonymize), clears auth cookies
+      description: |
+        Removes the user's workspace memberships, deletes workspaces where they are the only member,
+        and unassigns their tasks. Refused with 409 while the user is the last ADMIN of a workspace
+        that has other members.
+      operationId: deleteAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeleteAccountRequest"
+      responses:
+        "204":
+          description: Deleted; access and refresh cookies expired
+        "400":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+
+  /api/users/me/password:
+    put:
+      tags: [account]
+      summary: Change password after verifying the current one
+      operationId: changePassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+      responses:
+        "204":
+          description: Password changed
+        "400":
+          $ref: "#/components/responses/Problem"
+        "403":
           $ref: "#/components/responses/Problem"
 
   /api/workspaces:
@@ -655,6 +734,42 @@ components:
         displayName:
           type: string
 
+    UpdateAccountRequest:
+      type: object
+      description: Partial update; omitted fields are unchanged.
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 80
+        email:
+          type: string
+          format: email
+          maxLength: 320
+        currentPassword:
+          type: string
+          maxLength: 128
+          description: Required when email changes
+
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+          maxLength: 128
+        newPassword:
+          type: string
+          minLength: 8
+          maxLength: 128
+
+    DeleteAccountRequest:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+          maxLength: 128
     CreateWorkspaceRequest:
       type: object
       required: [name]

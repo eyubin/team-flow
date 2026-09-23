@@ -1,6 +1,7 @@
 package com.teamflow.workspace;
 
 import com.teamflow.auth.User;
+import com.teamflow.auth.UserDeletedEvent;
 import com.teamflow.auth.UserRepository;
 import com.teamflow.audit.AuditService;
 import java.time.Instant;
@@ -8,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.Locale;
+import org.springframework.context.event.EventListener;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -144,6 +146,43 @@ public class WorkspaceService {
         protectLastAdmin(member, null);
         members.delete(member);
         audit.record(userId, "MEMBER_REMOVED", "MEMBER", memberUserId, Map.of("workspaceId", workspaceId.toString()));
+    }
+
+    /**
+     * Runs inside the account-deletion transaction. Throwing here vetoes the
+     * deletion, so the last-admin check happens for every workspace before
+     * anything is changed and the error can name all of them at once.
+     */
+    @EventListener
+    @Transactional
+    public void onUserDeleted(UserDeletedEvent event) {
+        UUID userId = event.userId();
+        List<WorkspaceMember> memberships = members.findAllByIdUserId(userId);
+        List<String> blocking = memberships.stream()
+                .filter(member -> member.getRole() == Role.ADMIN)
+                .map(member -> member.getId().getWorkspaceId())
+                .filter(workspaceId -> members.countByIdWorkspaceId(workspaceId) > 1
+                        && members.countByIdWorkspaceIdAndRole(workspaceId, Role.ADMIN) <= 1)
+                .map(workspaceId -> requireWorkspace(workspaceId).getName())
+                .sorted()
+                .toList();
+        if (!blocking.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Make someone else an administrator of " + String.join(", ", blocking) + " before deleting your account");
+        }
+        for (WorkspaceMember member : memberships) {
+            UUID workspaceId = member.getId().getWorkspaceId();
+            if (members.countByIdWorkspaceId(workspaceId) == 1) {
+                // Nobody else could ever reach it again; projects, tasks and
+                // comments go with it through ON DELETE CASCADE.
+                workspaces.deleteById(workspaceId);
+                audit.record(userId, "WORKSPACE_DELETED", "WORKSPACE", workspaceId, Map.of("reason", "ACCOUNT_DELETED"));
+            } else {
+                members.delete(member);
+                audit.record(userId, "MEMBER_REMOVED", "MEMBER", userId,
+                        Map.of("workspaceId", workspaceId.toString(), "reason", "ACCOUNT_DELETED"));
+            }
+        }
     }
 
     private Workspace requireWorkspace(UUID workspaceId) {

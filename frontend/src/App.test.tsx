@@ -60,4 +60,20 @@ describe('App routing', () => {
 
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Sign in' })).toBeInTheDocument())
   })
+
+  // Signing out or deleting the account in one tab expires the cookies for
+  // all of them, so the others must stop showing the signed-in UI too.
+  it('signs out when another tab reports the session has ended', async () => {
+    server.use(signedIn, http.get('/api/workspaces', () => HttpResponse.json([workspace])))
+
+    renderWithProviders(<App />, { route: '/dashboard' })
+    expect(await screen.findByRole('heading', { name: 'Project dashboard' })).toBeInTheDocument()
+
+    server.use(http.get('/api/auth/me', () => new HttpResponse(null, { status: 401 })))
+    const otherTab = new BroadcastChannel('teamflow-auth')
+    otherTab.postMessage('signed-out')
+    otherTab.close()
+
+    expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
+  })
 })
