@@ -1,5 +1,5 @@
-import { Button, Callout, Flex } from '@radix-ui/themes'
-import { ExclamationTriangleIcon } from '@radix-ui/react-icons'
+import Alert from '@mui/material/Alert'
+import Button from '@mui/material/Button'
 
 type QueryErrorProps = {
   message?: string
@@ -14,18 +14,17 @@ type QueryErrorProps = {
  */
 export function QueryError({ message = "We couldn't load this. Please try again.", onRetry }: QueryErrorProps) {
   return (
-    <Callout.Root color="red" role="alert">
-      <Callout.Icon>
-        <ExclamationTriangleIcon />
-      </Callout.Icon>
-      <Flex align="center" justify="between" gap="3" width="100%" wrap="wrap">
-        <Callout.Text>{message}</Callout.Text>
-        {onRetry && (
-          <Button type="button" size="1" variant="soft" color="red" onClick={onRetry}>
+    <Alert
+      severity="error"
+      action={
+        onRetry && (
+          <Button type="button" size="small" color="error" onClick={onRetry}>
             Try again
           </Button>
-        )}
-      </Flex>
-    </Callout.Root>
+        )
+      }
+    >
+      {message}
+    </Alert>
   )
 }

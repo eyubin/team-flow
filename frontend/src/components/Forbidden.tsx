@@ -1,6 +1,10 @@
 import { Link as RouterLink } from 'react-router-dom'
-import { LockClosedIcon } from '@radix-ui/react-icons'
-import { Box, Callout, Flex, Heading, Link, Text } from '@radix-ui/themes'
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
+import Alert from '@mui/material/Alert'
+import Box from '@mui/material/Box'
+import Link from '@mui/material/Link'
+import Stack from '@mui/material/Stack'
+import Typography from '@mui/material/Typography'
 import { useDocumentTitle } from '../lib/useDocumentTitle.ts'
 
 type ForbiddenProps = {
@@ -10,30 +14,23 @@ type ForbiddenProps = {
 export function Forbidden({ message }: ForbiddenProps) {
   useDocumentTitle('Access denied')
   return (
-    <Box asChild maxWidth="30rem">
-      <main>
-        <Flex direction="column" gap="4">
-          <Text size="1" color="red" weight="bold" style={{ letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-            Access denied
-          </Text>
-          <Heading as="h1" size="7">
-            You don't have permission to view this
-          </Heading>
-          <Callout.Root color="red" role="alert">
-            <Callout.Icon>
-              <LockClosedIcon />
-            </Callout.Icon>
-            <Callout.Text>
-              {message ?? "Your role in this workspace doesn't allow this. Ask an admin for access if you think this is a mistake."}
-            </Callout.Text>
-          </Callout.Root>
-          <Text as="p">
-            <Link asChild>
-              <RouterLink to="/dashboard">Back to dashboard</RouterLink>
-            </Link>
-          </Text>
-        </Flex>
-      </main>
+    <Box component="main" sx={{ maxWidth: '30rem' }}>
+      <Stack spacing={2}>
+        <Typography variant="overline" color="error.main" sx={{ fontWeight: 700, letterSpacing: '0.08em' }}>
+          Access denied
+        </Typography>
+        <Typography variant="h4" component="h1" sx={{ fontWeight: 700 }}>
+          You don't have permission to view this
+        </Typography>
+        <Alert severity="error" icon={<LockOutlinedIcon fontSize="inherit" />}>
+          {message ?? "Your role in this workspace doesn't allow this. Ask an admin for access if you think this is a mistake."}
+        </Alert>
+        <Typography component="p">
+          <Link component={RouterLink} to="/dashboard">
+            Back to dashboard
+          </Link>
+        </Typography>
+      </Stack>
     </Box>
   )
 }

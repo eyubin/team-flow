@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Badge, Card, Flex, Heading, Text } from '@radix-ui/themes'
+import Card from '@mui/material/Card'
+import CardContent from '@mui/material/CardContent'
+import Chip from '@mui/material/Chip'
+import Stack from '@mui/material/Stack'
+import Typography from '@mui/material/Typography'
 
 type HealthState = 'loading' | 'ok' | 'error'
 
@@ -7,10 +11,10 @@ type HealthBody = {
   status?: string
 }
 
-const BADGE_BY_STATE: Record<HealthState, { color: 'gray' | 'green' | 'red'; label: string }> = {
-  loading: { color: 'gray', label: 'Checking' },
-  ok: { color: 'green', label: 'Healthy' },
-  error: { color: 'red', label: 'Unavailable' },
+const BADGE_BY_STATE: Record<HealthState, { color: 'default' | 'success' | 'error'; label: string }> = {
+  loading: { color: 'default', label: 'Checking' },
+  ok: { color: 'success', label: 'Healthy' },
+  error: { color: 'error', label: 'Unavailable' },
 }
 
 export function HealthStatus() {
@@ -50,20 +54,18 @@ export function HealthStatus() {
   const badge = BADGE_BY_STATE[state]
 
   return (
-    <Card asChild variant="surface">
-      <section aria-live="polite">
-        <Flex align="center" justify="between" gap="3" mb="2">
-          <Heading as="h2" size="4">
+    <Card component="section" aria-live="polite">
+      <CardContent>
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+          <Typography variant="h6" component="h2">
             API health
-          </Heading>
-          <Badge color={badge.color} variant="soft">
-            {badge.label}
-          </Badge>
-        </Flex>
-        <Text as="p" color="gray">
+          </Typography>
+          <Chip color={badge.color} label={badge.label} size="small" variant="outlined" />
+        </Stack>
+        <Typography component="p" color="text.secondary">
           {state === 'loading' ? 'Loading' : message}
-        </Text>
-      </section>
+        </Typography>
+      </CardContent>
     </Card>
   )
 }

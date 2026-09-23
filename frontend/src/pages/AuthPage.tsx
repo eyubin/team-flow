@@ -5,8 +5,18 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link as RouterLink, useNavigate } from 'react-router-dom'
-import { Box, Button, Card, Flex, Heading, IconButton, Link, Text, TextField } from '@radix-ui/themes'
-import { EyeClosedIcon, EyeOpenIcon } from '@radix-ui/react-icons'
+import VisibilityIcon from '@mui/icons-material/Visibility'
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
+import Box from '@mui/material/Box'
+import Button from '@mui/material/Button'
+import Card from '@mui/material/Card'
+import CardContent from '@mui/material/CardContent'
+import IconButton from '@mui/material/IconButton'
+import InputAdornment from '@mui/material/InputAdornment'
+import Link from '@mui/material/Link'
+import Stack from '@mui/material/Stack'
+import TextField from '@mui/material/TextField'
+import Typography from '@mui/material/Typography'
 import { useProfile, type Profile } from '../lib/auth.ts'
 import { StatusMessage, type StatusMessageValue } from '../components/StatusMessage.tsx'
 import { useDocumentTitle } from '../lib/useDocumentTitle.ts'
@@ -113,138 +123,117 @@ export function AuthPage() {
 
   if (profile) {
     return (
-      <Flex align="center" justify="center" style={{ minHeight: 'calc(100vh - 12rem)' }}>
-        <Box asChild maxWidth="30rem" width="100%">
-          <main>
-            <Flex direction="column" gap="3">
-              <Text size="1" color="iris" weight="bold" style={{ letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                TeamFlow account
-              </Text>
-              <Heading as="h1" size="7">
-                Welcome, {profile.displayName}
-              </Heading>
-              <Text as="p" color="gray">
-                {profile.email}
-              </Text>
-              <Flex gap="3" align="center">
-                <Button type="button" variant="soft" color="gray" onClick={() => logoutMutation.mutate()} disabled={logoutMutation.isPending}>
-                  Sign out
-                </Button>
-                <Link asChild>
-                  <RouterLink to="/dashboard">Open dashboard</RouterLink>
-                </Link>
-              </Flex>
-              <StatusMessage value={message} />
-            </Flex>
-          </main>
+      <Stack sx={{ alignItems: 'center', justifyContent: 'center', minHeight: 'calc(100vh - 12rem)' }}>
+        <Box component="main" sx={{ maxWidth: '30rem', width: '100%' }}>
+          <Stack spacing={1.5}>
+            <Typography variant="overline" color="primary.main" sx={{ fontWeight: 700, letterSpacing: '0.08em' }}>
+              TeamFlow account
+            </Typography>
+            <Typography variant="h4" component="h1" sx={{ fontWeight: 700 }}>
+              Welcome, {profile.displayName}
+            </Typography>
+            <Typography component="p" color="text.secondary">
+              {profile.email}
+            </Typography>
+            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+              <Button type="button" variant="outlined" color="inherit" onClick={() => logoutMutation.mutate()} disabled={logoutMutation.isPending}>
+                Sign out
+              </Button>
+              <Link component={RouterLink} to="/dashboard">
+                Open dashboard
+              </Link>
+            </Stack>
+            <StatusMessage value={message} />
+          </Stack>
         </Box>
-      </Flex>
+      </Stack>
     )
   }
 
   return (
-    <Flex align="center" justify="center" style={{ minHeight: 'calc(100vh - 12rem)' }}>
-      <Box asChild maxWidth="26rem" width="100%">
-        <main>
-          <Flex direction="column" gap="3" mb="4">
-            <Text size="1" color="iris" weight="bold" style={{ letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-              TeamFlow account
-            </Text>
-            <Heading as="h1" size="7">
-              {mode === 'login' ? 'Sign in' : 'Create your account'}
-            </Heading>
-            <Text as="p" color="gray">
-              Use the local account flow to enter your workspace.
-            </Text>
-          </Flex>
-          <Card size="3">
+    <Stack sx={{ alignItems: 'center', justifyContent: 'center', minHeight: 'calc(100vh - 12rem)' }}>
+      <Box component="main" sx={{ maxWidth: '26rem', width: '100%' }}>
+        <Stack spacing={1.5} sx={{ mb: 3 }}>
+          <Typography variant="overline" color="primary.main" sx={{ fontWeight: 700, letterSpacing: '0.08em' }}>
+            TeamFlow account
+          </Typography>
+          <Typography variant="h4" component="h1" sx={{ fontWeight: 700 }}>
+            {mode === 'login' ? 'Sign in' : 'Create your account'}
+          </Typography>
+          <Typography component="p" color="text.secondary">
+            Use the local account flow to enter your workspace.
+          </Typography>
+        </Stack>
+        <Card>
+          <CardContent>
             <form onSubmit={handleSubmit(onSubmit)} noValidate>
-              <Flex direction="column" gap="4">
+              <Stack spacing={2}>
                 {mode === 'register' && (
-                  <Flex asChild direction="column" gap="1">
-                    <label>
-                      <Text weight="medium" size="2">
-                        Display name
-                      </Text>
-                      <TextField.Root
-                        {...register('displayName')}
-                        maxLength={80}
-                        autoComplete="name"
-                        aria-invalid={!!errors.displayName}
-                      />
-                      {errors.displayName && (
-                        <Text role="alert" color="red" size="1">
-                          {errors.displayName.message}
-                        </Text>
-                      )}
-                    </label>
-                  </Flex>
+                  <TextField
+                    label="Display name"
+                    autoComplete="name"
+                    error={!!errors.displayName}
+                    helperText={errors.displayName?.message}
+                    slotProps={{
+                      htmlInput: { maxLength: 80 },
+                      formHelperText: { role: 'alert' },
+                    }}
+                    {...register('displayName')}
+                  />
                 )}
-                <Flex asChild direction="column" gap="1">
-                  <label>
-                    <Text weight="medium" size="2">
-                      Email
-                    </Text>
-                    <TextField.Root
-                      type="email"
-                      {...register('email')}
-                      maxLength={320}
-                      autoComplete="email"
-                      aria-invalid={!!errors.email}
-                    />
-                    {errors.email && (
-                      <Text role="alert" color="red" size="1">
-                        {errors.email.message}
-                      </Text>
-                    )}
-                  </label>
-                </Flex>
-                <Flex asChild direction="column" gap="1">
-                  <label>
-                    <Text weight="medium" size="2">
-                      Password
-                    </Text>
-                    <TextField.Root
-                      type={showPassword ? 'text' : 'password'}
-                      {...register('password')}
-                      maxLength={128}
-                      autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                      aria-invalid={!!errors.password}
-                    >
-                      <TextField.Slot side="right">
-                        <IconButton
-                          type="button"
-                          variant="ghost"
-                          color="gray"
-                          size="1"
-                          aria-label={showPassword ? 'Hide password' : 'Show password'}
-                          onClick={() => setShowPassword((current) => !current)}
-                        >
-                          {showPassword ? <EyeClosedIcon /> : <EyeOpenIcon />}
-                        </IconButton>
-                      </TextField.Slot>
-                    </TextField.Root>
-                    {errors.password && (
-                      <Text role="alert" color="red" size="1">
-                        {errors.password.message}
-                      </Text>
-                    )}
-                  </label>
-                </Flex>
-                <Button type="submit" disabled={authMutation.isPending}>
+                <TextField
+                  label="Email"
+                  type="email"
+                  autoComplete="email"
+                  error={!!errors.email}
+                  helperText={errors.email?.message}
+                  slotProps={{
+                    htmlInput: { maxLength: 320 },
+                    formHelperText: { role: 'alert' },
+                  }}
+                  {...register('email')}
+                />
+                <TextField
+                  label="Password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                  error={!!errors.password}
+                  helperText={errors.password?.message}
+                  slotProps={{
+                    htmlInput: { maxLength: 128 },
+                    formHelperText: { role: 'alert' },
+                    input: {
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton
+                            type="button"
+                            edge="end"
+                            size="small"
+                            aria-label={showPassword ? 'Hide password' : 'Show password'}
+                            onClick={() => setShowPassword((current) => !current)}
+                          >
+                            {showPassword ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    },
+                  }}
+                  {...register('password')}
+                />
+                <Button type="submit" variant="contained" disabled={authMutation.isPending}>
                   {authMutation.isPending ? 'Working...' : mode === 'login' ? 'Sign in' : 'Register'}
                 </Button>
-              </Flex>
+              </Stack>
             </form>
-          </Card>
-          <Flex mt="3" direction="column" gap="2">
-            <Button type="button" variant="ghost" onClick={toggleMode} style={{ justifyContent: 'flex-start' }}>
-              {mode === 'login' ? 'Need an account?' : 'Already registered?'}
-            </Button>
-            <StatusMessage value={message} />
-          </Flex>
-        </main>
+          </CardContent>
+        </Card>
+        <Stack spacing={1} sx={{ mt: 2, alignItems: 'flex-start' }}>
+          <Button type="button" onClick={toggleMode}>
+            {mode === 'login' ? 'Need an account?' : 'Already registered?'}
+          </Button>
+          <StatusMessage value={message} />
+        </Stack>
       </Box>
-    </Flex>
+    </Stack>
   )
 }

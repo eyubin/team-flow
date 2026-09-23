@@ -4,22 +4,25 @@ import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  AlertDialog,
-  Badge,
-  Box,
-  Button,
-  Callout,
-  Card,
-  Flex,
-  Heading,
-  Link,
-  Select,
-  Table,
-  Text,
-  TextField,
-} from '@radix-ui/themes'
-import { InfoCircledIcon } from '@radix-ui/react-icons'
+// The members table still renders with Radix primitives; it is replaced
+// wholesale by the MUI X DataGrid in the next step, so it is not worth
+// rebuilding here only to delete it.
+import { Badge, Select, Table } from '@radix-ui/themes'
+import Alert from '@mui/material/Alert'
+import Box from '@mui/material/Box'
+import Button from '@mui/material/Button'
+import Card from '@mui/material/Card'
+import CardContent from '@mui/material/CardContent'
+import Dialog from '@mui/material/Dialog'
+import DialogActions from '@mui/material/DialogActions'
+import DialogContent from '@mui/material/DialogContent'
+import DialogContentText from '@mui/material/DialogContentText'
+import DialogTitle from '@mui/material/DialogTitle'
+import Link from '@mui/material/Link'
+import MenuItem from '@mui/material/MenuItem'
+import Stack from '@mui/material/Stack'
+import TextField from '@mui/material/TextField'
+import Typography from '@mui/material/Typography'
 import { isForbidden, request } from '../lib/api.ts'
 import { Forbidden } from '../components/Forbidden.tsx'
 import { QueryError } from '../components/QueryError.tsx'
@@ -137,57 +140,48 @@ export function MembersPage() {
 
   if (loading)
     return (
-      <Box asChild>
-        <main>
-          <Text aria-live="polite">Loading members...</Text>
-        </main>
+      <Box component="main">
+        <Typography aria-live="polite">Loading members...</Typography>
       </Box>
     )
   if (forbidden) return <Forbidden message="You don't have access to this workspace's members." />
   if (failed)
     return (
-      <Box asChild>
-        <main>
-          <QueryError
-            message="We couldn't load this workspace's members."
-            onRetry={() => {
-              void workspacesQuery.refetch()
-              void membersQuery.refetch()
-            }}
-          />
-        </main>
+      <Box component="main">
+        <QueryError
+          message="We couldn't load this workspace's members."
+          onRetry={() => {
+            void workspacesQuery.refetch()
+            void membersQuery.refetch()
+          }}
+        />
       </Box>
     )
 
   const myRole = workspace?.myRole
 
   return (
-    <Box asChild>
-      <main>
-        <Flex direction="column" gap="6">
-          <Flex direction="column" gap="3">
-            <Text size="1" color="iris" weight="bold" style={{ letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-              TeamFlow workspace
-            </Text>
-            <Heading as="h1" size="8">
-              Members{workspace ? ` – ${workspace.name}` : ''}
-            </Heading>
-          </Flex>
+    <Box component="main">
+      <Stack spacing={4}>
+        <Stack spacing={1.5}>
+          <Typography variant="overline" color="primary.main" sx={{ fontWeight: 700, letterSpacing: '0.08em' }}>
+            TeamFlow workspace
+          </Typography>
+          <Typography variant="h3" component="h1" sx={{ fontWeight: 700 }}>
+            Members{workspace ? ` – ${workspace.name}` : ''}
+          </Typography>
+        </Stack>
 
-          <Flex direction="column" gap="3" asChild>
-            <section aria-labelledby="members-heading">
-              <Heading as="h2" size="5" id="members-heading">
-                Members
-              </Heading>
-              {members.length === 0 ? (
-                <Callout.Root color="gray">
-                  <Callout.Icon>
-                    <InfoCircledIcon />
-                  </Callout.Icon>
-                  <Callout.Text>No members found.</Callout.Text>
-                </Callout.Root>
-              ) : (
-                <Box overflowX="auto">
+        <Stack component="section" aria-labelledby="members-heading" spacing={1.5}>
+          <Typography variant="h5" component="h2" id="members-heading" sx={{ fontWeight: 700 }}>
+            Members
+          </Typography>
+          {members.length === 0 ? (
+            <Alert severity="info" role="status">
+              No members found.
+            </Alert>
+          ) : (
+            <Box sx={{ overflowX: 'auto' }}>
                   <Table.Root variant="surface">
                     <Table.Header>
                       <Table.Row>
@@ -200,12 +194,12 @@ export function MembersPage() {
                       {members.map((member) => (
                         <Table.Row key={member.userId}>
                           <Table.RowHeaderCell>
-                            <Flex direction="column">
-                              <Text weight="bold">{member.displayName}</Text>
-                              <Text color="gray" size="1">
+                            <Stack>
+                              <Typography sx={{ fontWeight: 700 }}>{member.displayName}</Typography>
+                              <Typography variant="caption" color="text.secondary">
                                 {member.email}
-                              </Text>
-                            </Flex>
+                              </Typography>
+                            </Stack>
                           </Table.RowHeaderCell>
                           <Table.Cell>
                             {myRole === 'ADMIN' ? (
@@ -230,9 +224,9 @@ export function MembersPage() {
                             <Table.Cell>
                               <Button
                                 type="button"
-                                color="red"
-                                variant="soft"
-                                size="1"
+                                color="error"
+                                variant="outlined"
+                                size="small"
                                 onClick={() => setMemberPendingRemoval(member)}
                               >
                                 Remove
@@ -245,103 +239,82 @@ export function MembersPage() {
                   </Table.Root>
                 </Box>
               )}
-              {myRole === 'ADMIN' && (
-                <Card size="3">
-                  <form
-                    onSubmit={memberForm.handleSubmit((values) => {
-                      setActionForbidden(false)
-                      addMemberMutation.mutate(values)
-                    })}
-                    noValidate
-                  >
-                    <Flex direction={{ initial: 'column', sm: 'row' }} align={{ initial: 'stretch', sm: 'end' }} gap="3" wrap="wrap">
-                      <Flex asChild direction="column" gap="1" flexGrow="1" minWidth="12rem">
-                        <label>
-                          <Text weight="medium" size="2">
-                            Email
-                          </Text>
-                          <TextField.Root
-                            type="email"
-                            {...memberForm.register('email')}
-                            aria-invalid={!!memberForm.formState.errors.email}
-                          />
-                          {memberForm.formState.errors.email && (
-                            <Text role="alert" color="red" size="1">
-                              {memberForm.formState.errors.email.message}
-                            </Text>
-                          )}
-                        </label>
-                      </Flex>
-                      <Flex asChild direction="column" gap="1">
-                        <label>
-                          <Text weight="medium" size="2">
-                            Role
-                          </Text>
-                          <Controller
-                            name="role"
-                            control={memberForm.control}
-                            render={({ field }) => (
-                              <Select.Root value={field.value} onValueChange={field.onChange}>
-                                <Select.Trigger aria-label="Role" />
-                                <Select.Content>
-                                  <Select.Item value="MEMBER">Member</Select.Item>
-                                  <Select.Item value="VIEWER">Viewer</Select.Item>
-                                  <Select.Item value="ADMIN">Admin</Select.Item>
-                                </Select.Content>
-                              </Select.Root>
-                            )}
-                          />
-                        </label>
-                      </Flex>
-                      <Button type="submit" disabled={addMemberMutation.isPending}>
-                        Add member
-                      </Button>
-                    </Flex>
-                  </form>
-                </Card>
-              )}
-            </section>
-          </Flex>
-
-          {actionForbidden && (
-            <Callout.Root color="red" role="alert">
-              <Callout.Icon>
-                <InfoCircledIcon />
-              </Callout.Icon>
-              <Callout.Text>
-                You don't have permission to do that. This action requires a higher role in this workspace.
-              </Callout.Text>
-            </Callout.Root>
+          {myRole === 'ADMIN' && (
+            <Card>
+              <CardContent>
+                <form
+                  onSubmit={memberForm.handleSubmit((values) => {
+                    setActionForbidden(false)
+                    addMemberMutation.mutate(values)
+                  })}
+                  noValidate
+                >
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', sm: 'flex-start' } }}>
+                    <TextField
+                      label="Email"
+                      type="email"
+                      fullWidth
+                      error={!!memberForm.formState.errors.email}
+                      helperText={memberForm.formState.errors.email?.message}
+                      slotProps={{ formHelperText: { role: 'alert' } }}
+                      {...memberForm.register('email')}
+                    />
+                    <Controller
+                      name="role"
+                      control={memberForm.control}
+                      render={({ field }) => (
+                        <TextField select label="Role" sx={{ minWidth: '10rem' }} {...field}>
+                          <MenuItem value="MEMBER">Member</MenuItem>
+                          <MenuItem value="VIEWER">Viewer</MenuItem>
+                          <MenuItem value="ADMIN">Admin</MenuItem>
+                        </TextField>
+                      )}
+                    />
+                    <Button type="submit" variant="contained" disabled={addMemberMutation.isPending}>
+                      Add member
+                    </Button>
+                  </Stack>
+                </form>
+              </CardContent>
+            </Card>
           )}
-          <StatusMessage value={message} />
-          <Text as="p">
-            <Link asChild>
-              <RouterLink to="/dashboard">Back to dashboard</RouterLink>
-            </Link>
-          </Text>
-        </Flex>
+        </Stack>
 
-        <AlertDialog.Root open={!!memberPendingRemoval} onOpenChange={(open) => !open && setMemberPendingRemoval(null)}>
-          <AlertDialog.Content maxWidth="26rem">
-            <AlertDialog.Title>Remove member</AlertDialog.Title>
-            <AlertDialog.Description>
-              Remove {memberPendingRemoval?.displayName} from this workspace? They will lose access immediately.
-            </AlertDialog.Description>
-            <Flex gap="3" mt="4" justify="end">
-              <AlertDialog.Cancel>
-                <Button variant="soft" color="gray">
-                  Cancel
-                </Button>
-              </AlertDialog.Cancel>
-              <AlertDialog.Action>
-                <Button color="red" onClick={confirmRemoveMember}>
-                  Remove
-                </Button>
-              </AlertDialog.Action>
-            </Flex>
-          </AlertDialog.Content>
-        </AlertDialog.Root>
-      </main>
+        {actionForbidden && (
+          <Alert severity="error">
+            You don't have permission to do that. This action requires a higher role in this workspace.
+          </Alert>
+        )}
+        <StatusMessage value={message} />
+        <Typography component="p">
+          <Link component={RouterLink} to="/dashboard">
+            Back to dashboard
+          </Link>
+        </Typography>
+      </Stack>
+
+      <Dialog
+        open={!!memberPendingRemoval}
+        onClose={() => setMemberPendingRemoval(null)}
+        slotProps={{ paper: { role: 'alertdialog', sx: { maxWidth: '26rem' } } }}
+        aria-labelledby="remove-member-title"
+        aria-describedby="remove-member-description"
+      >
+        <DialogTitle id="remove-member-title">Remove member</DialogTitle>
+        <DialogContent>
+          <DialogContentText id="remove-member-description">
+            Remove {memberPendingRemoval?.displayName} from this workspace? They will lose access immediately.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button color="inherit" onClick={() => setMemberPendingRemoval(null)}>
+            Cancel
+          </Button>
+          <Button color="error" variant="contained" onClick={confirmRemoveMember}>
+            Remove
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }
