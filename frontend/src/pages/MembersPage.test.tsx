@@ -105,6 +105,23 @@ describe('MembersPage', () => {
     await waitFor(() => expect(deleted).toBe(true))
   })
 
+  it('sorts members by name from the column header', async () => {
+    const ada = { userId: 'user-3', email: 'ada@example.com', displayName: 'Ada Lovelace', role: 'ADMIN' as const }
+    server.use(withWorkspaces, http.get('/api/workspaces/:workspaceId/members', () => HttpResponse.json([member, ada])))
+
+    const { user } = renderMembers()
+
+    const firstNameBefore = (await screen.findAllByRole('row'))[1]
+    expect(within(firstNameBefore).getByText('Grace Hopper')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('columnheader', { name: /Member/ }))
+
+    await waitFor(() => {
+      const firstRow = screen.getAllByRole('row')[1]
+      expect(within(firstRow).getByText('Ada Lovelace')).toBeInTheDocument()
+    })
+  })
+
   it('shows the forbidden page when the member list is not accessible', async () => {
     server.use(withWorkspaces, http.get('/api/workspaces/:workspaceId/members', () => problem(403, 'Nope')))
 

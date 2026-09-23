@@ -4,11 +4,9 @@ import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-// The members table still renders with Radix primitives; it is replaced
-// wholesale by the MUI X DataGrid in the next step, so it is not worth
-// rebuilding here only to delete it.
-import { Badge, Select, Table } from '@radix-ui/themes'
+import { DataGrid, type GridColDef } from '@mui/x-data-grid'
 import Alert from '@mui/material/Alert'
+import Chip from '@mui/material/Chip'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Card from '@mui/material/Card'
@@ -49,10 +47,10 @@ const memberSchema = z.object({
 
 type MemberValues = z.infer<typeof memberSchema>
 
-const ROLE_BADGE_COLOR: Record<Member['role'], 'iris' | 'gray' | 'amber'> = {
-  ADMIN: 'iris',
-  MEMBER: 'gray',
-  VIEWER: 'amber',
+const ROLE_CHIP_COLOR: Record<Member['role'], 'primary' | 'default' | 'warning'> = {
+  ADMIN: 'primary',
+  MEMBER: 'default',
+  VIEWER: 'warning',
 }
 
 async function fetchWorkspaces() {
@@ -160,6 +158,68 @@ export function MembersPage() {
 
   const myRole = workspace?.myRole
 
+  const columns: GridColDef<Member>[] = [
+    {
+      field: 'displayName',
+      headerName: 'Member',
+      flex: 1,
+      minWidth: 200,
+      sortable: true,
+      renderCell: ({ row }) => (
+        <Stack sx={{ justifyContent: 'center', height: '100%' }}>
+          <Typography sx={{ fontWeight: 700 }}>{row.displayName}</Typography>
+          <Typography variant="caption" color="text.secondary">
+            {row.email}
+          </Typography>
+        </Stack>
+      ),
+    },
+    {
+      field: 'role',
+      headerName: 'Role',
+      width: 180,
+      sortable: true,
+      renderCell: ({ row }) =>
+        myRole === 'ADMIN' ? (
+          <TextField
+            select
+            size="small"
+            value={row.role}
+            onChange={(event) => changeRole(row, event.target.value as Member['role'])}
+            slotProps={{ select: { 'aria-label': `Role for ${row.displayName}` } }}
+            sx={{ my: 1.5 }}
+          >
+            <MenuItem value="ADMIN">Admin</MenuItem>
+            <MenuItem value="MEMBER">Member</MenuItem>
+            <MenuItem value="VIEWER">Viewer</MenuItem>
+          </TextField>
+        ) : (
+          <Chip size="small" color={ROLE_CHIP_COLOR[row.role]} label={row.role} />
+        ),
+    },
+    ...(myRole === 'ADMIN'
+      ? [
+          {
+            field: 'actions',
+            headerName: '',
+            width: 120,
+            sortable: false,
+            renderCell: ({ row }: { row: Member }) => (
+              <Button
+                type="button"
+                color="error"
+                variant="outlined"
+                size="small"
+                onClick={() => setMemberPendingRemoval(row)}
+              >
+                Remove
+              </Button>
+            ),
+          } satisfies GridColDef<Member>,
+        ]
+      : []),
+  ]
+
   return (
     <Box component="main">
       <Stack spacing={4}>
@@ -181,64 +241,21 @@ export function MembersPage() {
               No members found.
             </Alert>
           ) : (
-            <Box sx={{ overflowX: 'auto' }}>
-                  <Table.Root variant="surface">
-                    <Table.Header>
-                      <Table.Row>
-                        <Table.ColumnHeaderCell>Member</Table.ColumnHeaderCell>
-                        <Table.ColumnHeaderCell>Role</Table.ColumnHeaderCell>
-                        {myRole === 'ADMIN' && <Table.ColumnHeaderCell></Table.ColumnHeaderCell>}
-                      </Table.Row>
-                    </Table.Header>
-                    <Table.Body>
-                      {members.map((member) => (
-                        <Table.Row key={member.userId}>
-                          <Table.RowHeaderCell>
-                            <Stack>
-                              <Typography sx={{ fontWeight: 700 }}>{member.displayName}</Typography>
-                              <Typography variant="caption" color="text.secondary">
-                                {member.email}
-                              </Typography>
-                            </Stack>
-                          </Table.RowHeaderCell>
-                          <Table.Cell>
-                            {myRole === 'ADMIN' ? (
-                              <Select.Root
-                                value={member.role}
-                                onValueChange={(value) => changeRole(member, value as Member['role'])}
-                              >
-                                <Select.Trigger aria-label={`Role for ${member.displayName}`} />
-                                <Select.Content>
-                                  <Select.Item value="ADMIN">Admin</Select.Item>
-                                  <Select.Item value="MEMBER">Member</Select.Item>
-                                  <Select.Item value="VIEWER">Viewer</Select.Item>
-                                </Select.Content>
-                              </Select.Root>
-                            ) : (
-                              <Badge color={ROLE_BADGE_COLOR[member.role]} variant="soft">
-                                {member.role}
-                              </Badge>
-                            )}
-                          </Table.Cell>
-                          {myRole === 'ADMIN' && (
-                            <Table.Cell>
-                              <Button
-                                type="button"
-                                color="error"
-                                variant="outlined"
-                                size="small"
-                                onClick={() => setMemberPendingRemoval(member)}
-                              >
-                                Remove
-                              </Button>
-                            </Table.Cell>
-                          )}
-                        </Table.Row>
-                      ))}
-                    </Table.Body>
-                  </Table.Root>
-                </Box>
-              )}
+            <DataGrid
+              rows={members}
+              columns={columns}
+              getRowId={(row: Member) => row.userId}
+              getRowHeight={() => 64}
+              autoHeight
+              hideFooter
+              disableColumnMenu
+              disableRowSelectionOnClick
+              // Workspace member lists are small, and turning virtualisation off
+              // keeps every row in the DOM for assistive tech and for tests.
+              disableVirtualization
+              aria-label="Workspace members"
+            />
+          )}
           {myRole === 'ADMIN' && (
             <Card>
               <CardContent>
