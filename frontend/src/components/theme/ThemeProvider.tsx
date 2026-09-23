@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Theme as RadixTheme } from '@radix-ui/themes'
 import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
 import { createAppTheme } from '../../theme/muiTheme.ts'
@@ -40,15 +39,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const value = useMemo(() => ({ preference, appearance, setPreference }), [preference, appearance, setPreference])
   const muiTheme = useMemo(() => createAppTheme(appearance), [appearance])
 
-  // Both design systems are mounted while the UI is migrated component by
-  // component. The Radix wrapper comes out once nothing imports it.
   return (
     <ThemeContext.Provider value={value}>
       <MuiThemeProvider theme={muiTheme}>
         <CssBaseline />
-        <RadixTheme accentColor="iris" grayColor="slate" radius="large" appearance={appearance} panelBackground="solid">
-          {children}
-        </RadixTheme>
+        {children}
       </MuiThemeProvider>
     </ThemeContext.Provider>
   )

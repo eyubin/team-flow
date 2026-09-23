@@ -11,5 +11,6 @@ Design artifacts for Stage 0. Stage 1 runnable skeleton: `make up` (see root REA
 | [ADR 0001](adr/0001-modular-monolith.md) | One deployable API, packaged by capability |
 | [ADR 0002](adr/0002-cookie-jwt-auth.md) | JWT in HttpOnly cookies + CSRF |
 | [ADR 0003](adr/0003-optimistic-locking.md) | Task `version` and HTTP 409 |
+| [ADR 0004](adr/0004-mui-design-system.md) | MUI as the frontend design system |
 
 Product and delivery goals: [github-portfolio-project-plan.md](../github-portfolio-project-plan.md).

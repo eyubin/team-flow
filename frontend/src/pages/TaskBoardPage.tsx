@@ -390,12 +390,12 @@ export function TaskBoardPage() {
       columnHelper.accessor('status', {
         header: 'Status',
         cell: (info) => (
-          <Chip size="small" color={STATUS_COLOR[info.getValue()]} label={STATUS_LABEL[info.getValue()]} />
+          <Chip size="small" variant="outlined" color={STATUS_COLOR[info.getValue()]} label={STATUS_LABEL[info.getValue()]} />
         ),
       }),
       columnHelper.accessor('priority', {
         header: 'Priority',
-        cell: (info) => <Chip size="small" color={PRIORITY_COLOR[info.getValue()]} label={info.getValue()} />,
+        cell: (info) => <Chip size="small" variant="outlined" color={PRIORITY_COLOR[info.getValue()]} label={info.getValue()} />,
       }),
       ]),
     [selectTask],
@@ -467,8 +467,8 @@ export function TaskBoardPage() {
               }}
               noValidate
             >
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', sm: 'flex-start' }, flexWrap: 'wrap' }}>
-<createForm.Field name="title">
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', sm: 'flex-start' } }}>
+                <createForm.Field name="title">
                   {(field) => (
                     <TextField
                       label="New task"
@@ -482,7 +482,7 @@ export function TaskBoardPage() {
                     />
                   )}
                 </createForm.Field>
-<createForm.Field name="status">
+                <createForm.Field name="status">
                   {(field) => (
                     <TextField
                       select
@@ -498,7 +498,7 @@ export function TaskBoardPage() {
                     </TextField>
                   )}
                 </createForm.Field>
-<createForm.Field name="priority">
+                <createForm.Field name="priority">
                   {(field) => (
                     <TextField
                       select
@@ -514,18 +514,24 @@ export function TaskBoardPage() {
                     </TextField>
                   )}
                 </createForm.Field>
-<createForm.Field name="assigneeId">
+                <createForm.Field name="assigneeId">
                   {(field) => (
                     <TextField
                       label="Assignee ID"
                       placeholder="Optional UUID"
+                      sx={{ minWidth: '10rem' }}
                       value={field.state.value}
                       onChange={(event) => field.handleChange(event.target.value)}
                       onBlur={field.handleBlur}
                     />
                   )}
                 </createForm.Field>
-                <Button type="submit" variant="contained" disabled={createTaskMutation.isPending}>
+                <Button
+                  type="submit"
+                  variant="contained"
+                  disabled={createTaskMutation.isPending}
+                  sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}
+                >
                   Create task
                 </Button>
               </Stack>
