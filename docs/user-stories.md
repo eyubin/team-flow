@@ -40,6 +40,19 @@ Authentication uses short-lived JWTs stored in **HttpOnly cookies**, plus CSRF p
 - Demo emails and passwords are documented in README (not treated as secrets).
 - Seed data creates one workspace, one project, sample tasks, and three members (`ADMIN`, `MEMBER`, `VIEWER`).
 
+### US-12 — Manage my account
+
+**As a** signed-in user, **I want** to edit, re-secure, or delete my own account **so that** my identity and access stay under my control.
+
+**Acceptance**
+
+- `GET /api/users/me` returns my profile; `PATCH` changes my display name and/or email and returns the updated profile.
+- Changing my email or password, or deleting my account, requires my current password; a wrong one returns `403` (not `401`, so the session is not treated as expired).
+- An email already used by another account returns `409`.
+- Deleting my account anonymizes my name and email, disables sign-in, expires my cookies, removes my memberships, deletes workspaces where I am the only member, and unassigns my tasks. My comments and audit history remain, attributed to "Deleted user". The email can be registered again.
+- If I am the last `ADMIN` of a workspace with other members, deletion is refused with `409` naming the workspace, and nothing changes.
+- There is no endpoint to edit or delete *another* user's account; roles are workspace-scoped.
+
 ---
 
 ## Workspaces and projects
@@ -157,3 +170,4 @@ Authentication uses short-lived JWTs stored in **HttpOnly cookies**, plus CSRF p
 | US-09 | `/api/tasks/{id}/comments`                       | Task detail                   |
 | US-10 | `/api/audit-events`                              | History                       |
 | US-11 | Problem Details + frontend mapping               | All screens                   |
+| US-12 | `/api/users/me`, `/api/users/me/password`        | Account settings              |

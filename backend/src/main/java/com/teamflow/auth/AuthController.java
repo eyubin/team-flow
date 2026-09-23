@@ -84,7 +84,7 @@ public class AuthController {
         return ResponseCookie.from(name, value).httpOnly(true).secure(false).sameSite("Lax").path(path).maxAge(maxAge).build().toString();
     }
 
-    private static String expiredCookie(String name, String path) {
+    static String expiredCookie(String name, String path) {
         return ResponseCookie.from(name, "").httpOnly(true).secure(false).sameSite("Lax").path(path).maxAge(Duration.ZERO).build().toString();
     }
 

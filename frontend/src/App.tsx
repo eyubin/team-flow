@@ -7,13 +7,14 @@ import { AppShell } from './components/layout/AppShell.tsx'
 import { RequireAuth } from './components/RequireAuth.tsx'
 import { AuthPage } from './pages/AuthPage.tsx'
 import { onUnauthorized } from './lib/api.ts'
-import { queryKeys } from './lib/queryKeys.ts'
+import { clearSession, onSignedOutElsewhere } from './lib/auth.ts'
 
 // AuthPage is the landing route, so it stays in the main chunk. The rest are
 // split out: MembersPage pulls in the DataGrid and TaskBoardPage pulls in
 // TanStack Table and Virtual, none of which a signed-out visitor needs.
 const StatusPage = lazy(() => import('./pages/StatusPage.tsx').then((m) => ({ default: m.StatusPage })))
 const DashboardPage = lazy(() => import('./pages/DashboardPage.tsx').then((m) => ({ default: m.DashboardPage })))
+const AccountPage = lazy(() => import('./pages/AccountPage.tsx').then((m) => ({ default: m.AccountPage })))
 const MembersPage = lazy(() => import('./pages/MembersPage.tsx').then((m) => ({ default: m.MembersPage })))
 const TaskBoardPage = lazy(() => import('./pages/TaskBoardPage.tsx').then((m) => ({ default: m.TaskBoardPage })))
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage.tsx').then((m) => ({ default: m.NotFoundPage })))
@@ -31,11 +32,19 @@ export default function App() {
   const queryClient = useQueryClient()
 
   useEffect(() => {
-    onUnauthorized(() => {
-      queryClient.setQueryData(queryKeys.auth.me(), null)
+    // Both mean the session is gone: a request came back 401 (expired, or the
+    // account was deleted on another device), or another tab signed out or
+    // deleted the account.
+    function signOut() {
+      clearSession(queryClient)
       navigate('/', { replace: true })
-    })
-    return () => onUnauthorized(null)
+    }
+    onUnauthorized(signOut)
+    const stopListening = onSignedOutElsewhere(signOut)
+    return () => {
+      onUnauthorized(null)
+      stopListening()
+    }
   }, [navigate, queryClient])
 
   return (
@@ -47,6 +56,7 @@ export default function App() {
           <Route path="/status" element={<StatusPage />} />
           <Route element={<RequireAuth />}>
             <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/account" element={<AccountPage />} />
             <Route path="/workspaces/:workspaceId/members" element={<MembersPage />} />
             <Route path="/projects/:projectId/tasks" element={<TaskBoardPage />} />
           </Route>

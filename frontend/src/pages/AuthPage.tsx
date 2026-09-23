@@ -15,7 +15,7 @@ import Link from '@mui/material/Link'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
-import { useProfile, type Profile } from '../lib/auth.ts'
+import { broadcastSignedOut, clearSession, useProfile, type Profile } from '../lib/auth.ts'
 import { firstErrorMessage } from '../lib/formError.ts'
 import { queryKeys } from '../lib/queryKeys.ts'
 import { StatusMessage, type StatusMessageValue } from '../components/StatusMessage.tsx'
@@ -122,7 +122,8 @@ export function AuthPage() {
   const logoutMutation = useMutation({
     mutationFn: signOut,
     onSuccess: () => {
-      queryClient.setQueryData(queryKeys.auth.me(), null)
+      clearSession(queryClient)
+      broadcastSignedOut()
       setMessage({ text: 'Signed out', tone: 'success' })
     },
   })
@@ -168,6 +169,9 @@ export function AuthPage() {
               </Button>
               <Link component={RouterLink} to="/dashboard">
                 Open dashboard
+              </Link>
+              <Link component={RouterLink} to="/account">
+                Account settings
               </Link>
             </Stack>
             <StatusMessage value={message} />
