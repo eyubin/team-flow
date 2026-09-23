@@ -20,9 +20,9 @@ export async function registerNewUser(page: Page, prefix: string) {
   await page.getByRole('button', { name: 'Need an account?' }).click()
   await page.getByLabel('Display name').fill(displayName)
   await page.getByLabel('Email').fill(email)
-  await page.getByLabel('Password').fill(password)
+  await page.getByLabel('Password', { exact: true }).fill(password)
   await page.getByRole('button', { name: 'Register', exact: true }).click()
-  await page.getByRole('heading', { name: `Welcome, ${displayName}` }).waitFor()
+  await page.getByRole('heading', { name: 'Project dashboard' }).waitFor()
 
   const response = await page.request.get('/api/auth/me')
   const profile = (await response.json()) as Profile
@@ -32,9 +32,14 @@ export async function registerNewUser(page: Page, prefix: string) {
 export async function signIn(page: Page, email: string, password: string) {
   await page.goto('/auth')
   await page.getByLabel('Email').fill(email)
-  await page.getByLabel('Password').fill(password)
+  await page.getByLabel('Password', { exact: true }).fill(password)
   await page.getByRole('button', { name: 'Sign in' }).click()
-  await page.getByRole('button', { name: 'Sign out' }).waitFor()
+  await page.getByRole('heading', { name: 'Project dashboard' }).waitFor()
+}
+
+export async function chooseOption(page: Page, label: string, optionLabel: string) {
+  await page.getByLabel(label, { exact: true }).click()
+  await page.getByRole('option', { name: optionLabel, exact: true }).click()
 }
 
 export async function createWorkspaceAndProject(page: Page, namePrefix: string) {
