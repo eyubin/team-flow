@@ -20,6 +20,7 @@ Adopt **MUI 9** (`@mui/material`) with the **Emotion** styling engine as the sin
 - **`@mui/x-data-grid`** (Community, MIT) renders the workspace members table. Virtualisation is disabled there: member lists are small, and keeping every row in the DOM serves assistive technology as well as the tests.
 - **TanStack Table** drives the task board, **TanStack Form** replaces `react-hook-form` across all seven forms (reusing the existing Zod schemas through Standard Schema), and **TanStack Virtual** windows task boards above 30 rows.
 - Style props are passed through `sx`. MUI's polymorphic `component` prop and its system props (`fontWeight`, `maxWidth`, responsive `alignItems`) do not typecheck together — the overload resolves `component` as `string` and drops it.
+- Routes are **lazily loaded**, with only the landing page in the entry chunk. MUI and its satellites are large enough that shipping every route up front would have made a first visit noticeably heavier than the Radix build it replaced.
 
 We chose Emotion over `@mui/material-pigment-css`, which is an optional peer. Emotion is the default, better documented path; zero-runtime styling can be revisited if the bundle cost below becomes a problem.
 
@@ -34,7 +35,7 @@ Positive:
 
 Negative:
 
-- **The bundle got bigger.** Transferred JS + CSS went from 261 kB gzipped (594 kB JS + 684 kB CSS) to 391 kB gzipped (1,310 kB JS, no CSS) — about +50%. Radix shipped its styling as a stylesheet, which compresses far better than the equivalent Emotion runtime plus MUI's component code. The build warns that the chunk exceeds 500 kB. Route-level code splitting, starting with the DataGrid on the members route, is the obvious next step and has not been done.
+- **Total shipped code grew, though the initial load did not.** Summed across every chunk, JS went from 594 kB (178 kB gzipped) to roughly 1,310 kB (391 kB gzipped); Radix shipped its styling as a stylesheet, which compresses far better than the equivalent Emotion runtime plus MUI's component code. Route-level code splitting keeps that off the critical path: every route except the landing page is lazily loaded, so a first visit pulls about 208 kB gzipped — below the 261 kB (178 kB JS + 82 kB CSS) the Radix build sent. The cost is paid per route on navigation instead, and the members route is the heaviest at 154 kB gzipped because of the DataGrid, which still trips the build's 500 kB chunk warning on its own.
 - MUI's `Alert` carries `role="alert"` at every severity, where the Radix `Callout` it replaced had no role. Informational banners must pass `role="status"` explicitly or every empty state becomes an assertive screen-reader interruption. Likewise `Dialog` is `role="dialog"`; destructive confirmations pass `role="alertdialog"`.
 - TanStack Form reads `defaultValues` when a field mounts, and a field that mounts *after* a `reset()` re-initialises from those defaults and silently discards the reset. Forms whose fields appear and disappear with a selection — the task detail form — must be remounted with a `key` rather than filled by resetting.
 - `useVirtualizer` trips the React Compiler's `incompatible-library` lint warning, so that component is skipped for auto-memoisation.
