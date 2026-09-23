@@ -77,6 +77,22 @@ describe('ThemeProvider', () => {
     expect(screen.getByTestId('mui-mode')).toHaveTextContent('dark')
   })
 
+  it('exposes the palette as CSS variables in the mui layer, for Tailwind to read', async () => {
+    const user = userEvent.setup()
+    renderProbe()
+    const emotionCss = () =>
+      Array.from(document.head.querySelectorAll('style[data-emotion]'))
+        .map((style) => style.textContent)
+        .join('')
+
+    expect(emotionCss()).toContain('@layer mui')
+    expect(emotionCss()).toMatch(/--mui-palette-background-default:\s*#fcfcfd/)
+
+    await user.click(screen.getByRole('button', { name: 'Go dark' }))
+
+    expect(emotionCss()).toMatch(/--mui-palette-background-default:\s*#111113/)
+  })
+
   it('resolves a dark appearance when the system prefers dark', () => {
     stubMatchMedia(true)
 

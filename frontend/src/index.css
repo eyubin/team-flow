@@ -1,3 +1,45 @@
+/* Layer order: MUI's Emotion styles (emitted into `mui` by StyledEngineProvider
+   enableCssLayer) sit above Tailwind's base but below its utilities, so a
+   utility class on an MUI component wins without `!important`. */
+@layer theme, base, mui, components, utilities;
+
+/* Tailwind without Preflight: MUI's CssBaseline is the one reset. See ADR 0005. */
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+
+/* MUI owns colour. Tailwind's default palette is dropped, and the colours that
+   remain read MUI's CSS variables, so they follow the dark-mode toggle. */
+@theme inline {
+  --color-*: initial;
+  --color-white: #fff;
+  --color-black: #000;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  --color-primary: var(--mui-palette-primary-main);
+  --color-primary-dark: var(--mui-palette-primary-dark);
+  --color-primary-light: var(--mui-palette-primary-light);
+  --color-primary-contrast: var(--mui-palette-primary-contrastText);
+  --color-error: var(--mui-palette-error-main);
+  --color-warning: var(--mui-palette-warning-main);
+  --color-info: var(--mui-palette-info-main);
+  --color-success: var(--mui-palette-success-main);
+  --color-background: var(--mui-palette-background-default);
+  --color-paper: var(--mui-palette-background-paper);
+  --color-text: var(--mui-palette-text-primary);
+  --color-text-secondary: var(--mui-palette-text-secondary);
+  --color-divider: var(--mui-palette-divider);
+}
+
+/* MUI's breakpoints, so `md:` means the same width as `theme.breakpoints.up('md')`. */
+@theme {
+  --breakpoint-sm: 600px;
+  --breakpoint-md: 900px;
+  --breakpoint-lg: 1200px;
+  --breakpoint-xl: 1536px;
+  --breakpoint-2xl: initial;
+}
+
 /* Resets beyond MUI's CssBaseline. The header and navigation styling that
    used to live here moved into AppShell's `sx`, so it reads from the MUI
    theme instead of Radix's CSS custom properties. */
