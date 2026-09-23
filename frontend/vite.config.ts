@@ -22,6 +22,9 @@ export default defineConfig({
       // import - otherwise an untested module is invisible rather than a 0%.
       include: ['src/**/*.{ts,tsx}'],
       exclude: ['src/test/**', 'src/main.tsx', 'src/**/*.test.{ts,tsx}', 'src/vite-env.d.ts'],
+      // Set just under the current numbers: enough to catch a regression,
+      // without failing the build the first time someone adds a branch.
+      thresholds: { statements: 80, branches: 70, functions: 73, lines: 83 },
     },
   },
 })

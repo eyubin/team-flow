@@ -44,7 +44,7 @@ frontend-install:
 	cd frontend && npm ci
 
 frontend-test:
-	cd frontend && npm run lint && npm run typecheck && npm test && npm run build
+	cd frontend && npm run lint && npm run typecheck && npm run test:coverage && npm run build
 
 e2e: env
 	$(COMPOSE) up --build -d --wait
