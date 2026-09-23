@@ -1,7 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Link as RouterLink, useParams } from 'react-router-dom'
-import { Controller, useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
+import { useForm } from '@tanstack/react-form'
 import { z } from 'zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -40,6 +39,7 @@ import TableSortLabel from '@mui/material/TableSortLabel'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import { ApiError, isForbidden, request } from '../lib/api.ts'
+import { firstErrorMessage } from '../lib/formError.ts'
 import { Forbidden } from '../components/Forbidden.tsx'
 import { QueryError } from '../components/QueryError.tsx'
 import { StatusMessage, type StatusMessageValue } from '../components/StatusMessage.tsx'
@@ -81,6 +81,11 @@ const taskTableFeatures = tableFeatures({
 
 const columnHelper = createColumnHelper<typeof taskTableFeatures, Task>()
 
+// Stable identity: useForm re-applies its options on every render, so a fresh
+// object literal here would push these defaults back over a reset().
+const EMPTY_TASK_FORM: TaskFormValues = { title: '', status: 'TODO', priority: 'MEDIUM', assigneeId: '' }
+const EMPTY_COMMENT_FORM: CommentValues = { body: '' }
+
 const STATUS_LABEL: Record<Task['status'], string> = { TODO: 'To do', IN_PROGRESS: 'In progress', DONE: 'Done' }
 const PRIORITY_COLOR: Record<Task['priority'], 'default' | 'warning' | 'error'> = { LOW: 'default', MEDIUM: 'warning', HIGH: 'error' }
 const STATUS_COLOR: Record<Task['status'], 'default' | 'primary' | 'success'> = { TODO: 'default', IN_PROGRESS: 'primary', DONE: 'success' }
@@ -96,6 +101,114 @@ async function fetchTasks(projectId: string, filterStatus: string, filterPriorit
 
 function taskToFormValues(task: Task): TaskFormValues {
   return { title: task.title, status: task.status, priority: task.priority, assigneeId: task.assigneeId ?? '' }
+}
+
+type TaskEditFormProps = {
+  task: Task
+  saving: boolean
+  onSave: (values: TaskFormValues) => void
+  onDelete: () => void
+}
+
+/**
+ * The detail form lives in its own component so it can be remounted per task
+ * version. TanStack Form reads `defaultValues` when a field mounts, and a
+ * field that mounts after a `reset()` re-initialises from those defaults and
+ * discards the reset - so filling the form by resetting it is not reliable
+ * when the fields themselves appear and disappear with the selection.
+ */
+function TaskEditForm({ task, saving, onSave, onDelete }: TaskEditFormProps) {
+  // Captured once per mount, so a background refetch cannot overwrite edits.
+  const [initialValues] = useState(() => taskToFormValues(task))
+  const form = useForm({
+    defaultValues: initialValues,
+    validators: { onSubmit: taskFormSchema },
+    onSubmit: ({ value }) => onSave(value),
+  })
+
+  return (
+    <Card>
+      <CardContent>
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  void form.handleSubmit()
+                }}
+                noValidate
+              >
+                <Stack spacing={1.5}>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', sm: 'flex-start' }, flexWrap: 'wrap' }}>
+                    <form.Field name="title">
+                      {(field) => (
+                        <TextField
+                          label="Title"
+                          sx={{ flexGrow: 1, minWidth: '12rem' }}
+                          value={field.state.value}
+                          onChange={(event) => field.handleChange(event.target.value)}
+                          onBlur={field.handleBlur}
+                          error={field.state.meta.errors.length > 0}
+                          helperText={firstErrorMessage(field.state.meta.errors)}
+                          slotProps={{ htmlInput: { maxLength: 200 }, formHelperText: { role: 'alert' } }}
+                        />
+                      )}
+                    </form.Field>
+                    <form.Field name="status">
+                      {(field) => (
+                        <TextField
+                          select
+                          label="Task status"
+                          sx={{ minWidth: '9rem' }}
+                          value={field.state.value}
+                          onChange={(event) => field.handleChange(event.target.value as Task['status'])}
+                          onBlur={field.handleBlur}
+                        >
+                          <MenuItem value="TODO">To do</MenuItem>
+                          <MenuItem value="IN_PROGRESS">In progress</MenuItem>
+                          <MenuItem value="DONE">Done</MenuItem>
+                        </TextField>
+                      )}
+                    </form.Field>
+                    <form.Field name="priority">
+                      {(field) => (
+                        <TextField
+                          select
+                          label="Task priority"
+                          sx={{ minWidth: '9rem' }}
+                          value={field.state.value}
+                          onChange={(event) => field.handleChange(event.target.value as Task['priority'])}
+                          onBlur={field.handleBlur}
+                        >
+                          <MenuItem value="LOW">Low</MenuItem>
+                          <MenuItem value="MEDIUM">Medium</MenuItem>
+                          <MenuItem value="HIGH">High</MenuItem>
+                        </TextField>
+                      )}
+                    </form.Field>
+                    <form.Field name="assigneeId">
+                      {(field) => (
+                        <TextField
+                          label="Task assignee ID"
+                          placeholder="Optional UUID"
+                          value={field.state.value}
+                          onChange={(event) => field.handleChange(event.target.value)}
+                          onBlur={field.handleBlur}
+                        />
+                      )}
+                    </form.Field>
+                  </Stack>
+                  <Stack direction="row" spacing={1.5}>
+                    <Button type="submit" variant="contained" disabled={saving}>
+                      Save task
+                    </Button>
+                    <Button type="button" color="error" variant="outlined" onClick={onDelete}>
+                      Delete task
+                    </Button>
+                  </Stack>
+                </Stack>
+              </form>
+      </CardContent>
+    </Card>
+  )
 }
 
 export function TaskBoardPage() {
@@ -136,12 +249,22 @@ export function TaskBoardPage() {
   })
   const auditEvents = auditQuery.data?.content ?? []
 
-  const createForm = useForm<TaskFormValues>({
-    resolver: zodResolver(taskFormSchema),
-    defaultValues: { title: '', status: 'TODO', priority: 'MEDIUM', assigneeId: '' },
+  const createForm = useForm({
+    defaultValues: EMPTY_TASK_FORM,
+    validators: { onSubmit: taskFormSchema },
+    onSubmit: ({ value }) => {
+      setActionForbidden(false)
+      createTaskMutation.mutate(value)
+    },
   })
-  const editForm = useForm<TaskFormValues>({ resolver: zodResolver(taskFormSchema) })
-  const commentForm = useForm<CommentValues>({ resolver: zodResolver(commentSchema), defaultValues: { body: '' } })
+  const commentForm = useForm({
+    defaultValues: EMPTY_COMMENT_FORM,
+    validators: { onSubmit: commentSchema },
+    onSubmit: ({ value }) => {
+      setActionForbidden(false)
+      addCommentMutation.mutate(value)
+    },
+  })
 
   const createTaskMutation = useMutation({
     mutationFn: (values: TaskFormValues) =>
@@ -212,15 +335,11 @@ export function TaskBoardPage() {
     },
   })
 
-  const selectTask = useCallback(
-    (task: Task) => {
-      setSelectedTaskId(task.id)
-      setHasConflict(false)
-      setActionForbidden(false)
-      editForm.reset(taskToFormValues(task))
-    },
-    [editForm],
-  )
+  const selectTask = useCallback((task: Task) => {
+    setSelectedTaskId(task.id)
+    setHasConflict(false)
+    setActionForbidden(false)
+  }, [])
 
   async function reloadSelectedTask() {
     if (!selectedTask) return
@@ -228,7 +347,6 @@ export function TaskBoardPage() {
       const fresh = (await request(`/api/tasks/${selectedTask.id}`)) as Task
       queryClient.setQueriesData<TaskPage>({ queryKey: ['tasks', projectId] }, (old) =>
         old ? { ...old, content: old.content.map((task) => (task.id === fresh.id ? fresh : task)) } : old)
-      editForm.reset(taskToFormValues(fresh))
       setHasConflict(false)
       void queryClient.invalidateQueries({ queryKey: ['tasks', fresh.id, 'comments'] })
       void queryClient.invalidateQueries({ queryKey: ['audit-events', fresh.id] })
@@ -317,44 +435,70 @@ export function TaskBoardPage() {
         <Card>
           <CardContent>
             <form
-              onSubmit={createForm.handleSubmit((values) => {
-                setActionForbidden(false)
-                createTaskMutation.mutate(values)
-              })}
+              onSubmit={(event) => {
+                event.preventDefault()
+                void createForm.handleSubmit()
+              }}
               noValidate
             >
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', sm: 'flex-start' }, flexWrap: 'wrap' }}>
-                <TextField
-                  label="New task"
-                  sx={{ flexGrow: 1, minWidth: '12rem' }}
-                  error={!!createForm.formState.errors.title}
-                  helperText={createForm.formState.errors.title?.message}
-                  slotProps={{ htmlInput: { maxLength: 200 }, formHelperText: { role: 'alert' } }}
-                  {...createForm.register('title')}
-                />
-                <Controller
-                  name="status"
-                  control={createForm.control}
-                  render={({ field }) => (
-                    <TextField select label="Status" sx={{ minWidth: '9rem' }} {...field}>
+<createForm.Field name="title">
+                  {(field) => (
+                    <TextField
+                      label="New task"
+                      sx={{ flexGrow: 1, minWidth: '12rem' }}
+                      value={field.state.value}
+                      onChange={(event) => field.handleChange(event.target.value)}
+                      onBlur={field.handleBlur}
+                      error={field.state.meta.errors.length > 0}
+                      helperText={firstErrorMessage(field.state.meta.errors)}
+                      slotProps={{ htmlInput: { maxLength: 200 }, formHelperText: { role: 'alert' } }}
+                    />
+                  )}
+                </createForm.Field>
+<createForm.Field name="status">
+                  {(field) => (
+                    <TextField
+                      select
+                      label="Status"
+                      sx={{ minWidth: '9rem' }}
+                      value={field.state.value}
+                      onChange={(event) => field.handleChange(event.target.value as Task['status'])}
+                      onBlur={field.handleBlur}
+                    >
                       <MenuItem value="TODO">To do</MenuItem>
                       <MenuItem value="IN_PROGRESS">In progress</MenuItem>
                       <MenuItem value="DONE">Done</MenuItem>
                     </TextField>
                   )}
-                />
-                <Controller
-                  name="priority"
-                  control={createForm.control}
-                  render={({ field }) => (
-                    <TextField select label="Priority" sx={{ minWidth: '9rem' }} {...field}>
+                </createForm.Field>
+<createForm.Field name="priority">
+                  {(field) => (
+                    <TextField
+                      select
+                      label="Priority"
+                      sx={{ minWidth: '9rem' }}
+                      value={field.state.value}
+                      onChange={(event) => field.handleChange(event.target.value as Task['priority'])}
+                      onBlur={field.handleBlur}
+                    >
                       <MenuItem value="LOW">Low</MenuItem>
                       <MenuItem value="MEDIUM">Medium</MenuItem>
                       <MenuItem value="HIGH">High</MenuItem>
                     </TextField>
                   )}
-                />
-                <TextField label="Assignee ID" placeholder="Optional UUID" {...createForm.register('assigneeId')} />
+                </createForm.Field>
+<createForm.Field name="assigneeId">
+                  {(field) => (
+                    <TextField
+                      label="Assignee ID"
+                      placeholder="Optional UUID"
+                      value={field.state.value}
+                      onChange={(event) => field.handleChange(event.target.value)}
+                      onBlur={field.handleBlur}
+                    />
+                  )}
+                </createForm.Field>
                 <Button type="submit" variant="contained" disabled={createTaskMutation.isPending}>
                   Create task
                 </Button>
@@ -457,61 +601,18 @@ export function TaskBoardPage() {
             <Typography variant="h5" component="h2" id="task-detail-heading" sx={{ fontWeight: 700 }}>
               Task details
             </Typography>
-            <Card>
-              <CardContent>
-                <form
-                  onSubmit={editForm.handleSubmit((values) => {
-                    setActionForbidden(false)
-                    updateTaskMutation.mutate(values)
-                  })}
-                  noValidate
-                >
-                  <Stack spacing={1.5}>
-                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', sm: 'flex-start' }, flexWrap: 'wrap' }}>
-                      <TextField
-                        label="Title"
-                        sx={{ flexGrow: 1, minWidth: '12rem' }}
-                        error={!!editForm.formState.errors.title}
-                        helperText={editForm.formState.errors.title?.message}
-                        slotProps={{ htmlInput: { maxLength: 200 }, formHelperText: { role: 'alert' } }}
-                        {...editForm.register('title')}
-                      />
-                      <Controller
-                        name="status"
-                        control={editForm.control}
-                        render={({ field }) => (
-                          <TextField select label="Task status" sx={{ minWidth: '9rem' }} {...field}>
-                            <MenuItem value="TODO">To do</MenuItem>
-                            <MenuItem value="IN_PROGRESS">In progress</MenuItem>
-                            <MenuItem value="DONE">Done</MenuItem>
-                          </TextField>
-                        )}
-                      />
-                      <Controller
-                        name="priority"
-                        control={editForm.control}
-                        render={({ field }) => (
-                          <TextField select label="Task priority" sx={{ minWidth: '9rem' }} {...field}>
-                            <MenuItem value="LOW">Low</MenuItem>
-                            <MenuItem value="MEDIUM">Medium</MenuItem>
-                            <MenuItem value="HIGH">High</MenuItem>
-                          </TextField>
-                        )}
-                      />
-                      <TextField label="Task assignee ID" placeholder="Optional UUID" {...editForm.register('assigneeId')} />
-                    </Stack>
-                    <Stack direction="row" spacing={1.5}>
-                      <Button type="submit" variant="contained" disabled={updateTaskMutation.isPending}>
-                        Save task
-                      </Button>
-                      <Button type="button" color="error" variant="outlined" onClick={() => setConfirmingDelete(true)}>
-                        Delete task
-                      </Button>
-                    </Stack>
-                  </Stack>
-                </form>
-              </CardContent>
-            </Card>
+            <TaskEditForm
+              // Remounting per version gives the form its values through
+              // defaultValues, which is the only point TanStack Form reads them.
+              key={`${selectedTask.id}-${selectedTask.version}`}
+              task={selectedTask}
+              saving={updateTaskMutation.isPending}
+              onSave={(values) => {
+                setActionForbidden(false)
+                updateTaskMutation.mutate(values)
+              }}
+              onDelete={() => setConfirmingDelete(true)}
+            />
 
             {hasConflict && (
               <Alert severity="warning">
@@ -527,21 +628,27 @@ export function TaskBoardPage() {
                 Comments
               </Typography>
               <form
-                onSubmit={commentForm.handleSubmit((values) => {
-                  setActionForbidden(false)
-                  addCommentMutation.mutate(values)
-                })}
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  void commentForm.handleSubmit()
+                }}
                 noValidate
               >
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', sm: 'flex-start' } }}>
-                  <TextField
-                    label="Comment"
-                    sx={{ flexGrow: 1, minWidth: '12rem' }}
-                    error={!!commentForm.formState.errors.body}
-                    helperText={commentForm.formState.errors.body?.message}
-                    slotProps={{ htmlInput: { maxLength: 4000 }, formHelperText: { role: 'alert' } }}
-                    {...commentForm.register('body')}
-                  />
+                  <commentForm.Field name="body">
+                    {(field) => (
+                      <TextField
+                        label="Comment"
+                        sx={{ flexGrow: 1, minWidth: '12rem' }}
+                        value={field.state.value}
+                        onChange={(event) => field.handleChange(event.target.value)}
+                        onBlur={field.handleBlur}
+                        error={field.state.meta.errors.length > 0}
+                        helperText={firstErrorMessage(field.state.meta.errors)}
+                        slotProps={{ htmlInput: { maxLength: 4000 }, formHelperText: { role: 'alert' } }}
+                      />
+                    )}
+                  </commentForm.Field>
                   <Button type="submit" variant="contained" disabled={addCommentMutation.isPending}>
                     Add comment
                   </Button>

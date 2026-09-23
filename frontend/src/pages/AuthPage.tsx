@@ -1,7 +1,5 @@
 import { useState } from 'react'
-import { useForm } from 'react-hook-form'
-import type { Resolver } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
+import { useForm } from '@tanstack/react-form'
 import { z } from 'zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link as RouterLink, useNavigate } from 'react-router-dom'
@@ -18,6 +16,7 @@ import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import { useProfile, type Profile } from '../lib/auth.ts'
+import { firstErrorMessage } from '../lib/formError.ts'
 import { StatusMessage, type StatusMessageValue } from '../components/StatusMessage.tsx'
 import { useDocumentTitle } from '../lib/useDocumentTitle.ts'
 
@@ -34,6 +33,11 @@ const registerSchema = loginSchema.extend({
   displayName: z.string().min(1, 'Display name is required').max(80),
 })
 
+// The form always carries a displayName field, so the login validator has to
+// describe it too - it just leaves it unconstrained. Both schemas then cover
+// the same shape, which is what lets the validator be swapped without a cast.
+const loginFormSchema = loginSchema.extend({ displayName: z.string() })
+
 type LoginValues = z.infer<typeof loginSchema>
 type RegisterValues = z.infer<typeof registerSchema>
 
@@ -49,11 +53,16 @@ async function authenticate(mode: Mode, values: LoginValues | RegisterValues): P
   const response = await fetch(`/api/auth/${mode}`, {
     method: 'POST',
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json', 'X-XSRF-TOKEN': csrfToken() ?? '' },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-XSRF-TOKEN': csrfToken() ?? '',
+    },
     body: JSON.stringify(values),
   })
   if (!response.ok) {
-    const problem = (await response.json().catch(() => null)) as { detail?: string } | null
+    const problem = (await response.json().catch(() => null)) as {
+      detail?: string
+    } | null
     throw new Error(problem?.detail ?? `Request failed (${response.status})`)
   }
   return (await response.json()) as Profile
@@ -77,14 +86,21 @@ export function AuthPage() {
 
   const profileQuery = useProfile()
 
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors },
-  } = useForm<RegisterValues>({
-    resolver: zodResolver(mode === 'register' ? registerSchema : loginSchema) as unknown as Resolver<RegisterValues>,
-    defaultValues: { email: '', password: '', displayName: '' },
+  // Selecting the schema by mode needs no cast: both are Standard Schemas over
+  // the same field set, where displayName is simply unconstrained on login.
+  const form = useForm({
+    defaultValues: {
+      email: '',
+      password: '',
+      displayName: '',
+    } as RegisterValues,
+    validators: {
+      onSubmit: mode === 'register' ? registerSchema : loginFormSchema,
+    },
+    onSubmit: ({ value }) => {
+      setMessage(null)
+      authMutation.mutate(mode === 'register' ? value : { email: value.email, password: value.password })
+    },
   })
 
   const authMutation = useMutation({
@@ -95,7 +111,10 @@ export function AuthPage() {
       navigate('/dashboard')
     },
     onError: (error: unknown) => {
-      setMessage({ text: error instanceof Error ? error.message : 'Request failed', tone: 'error' })
+      setMessage({
+        text: error instanceof Error ? error.message : 'Request failed',
+        tone: 'error',
+      })
     },
   })
 
@@ -107,15 +126,10 @@ export function AuthPage() {
     },
   })
 
-  function onSubmit(values: RegisterValues) {
-    setMessage(null)
-    authMutation.mutate(mode === 'register' ? values : { email: values.email, password: values.password })
-  }
-
   function toggleMode() {
     setMode((current) => (current === 'login' ? 'register' : 'login'))
     setShowPassword(false)
-    reset()
+    form.reset()
   }
 
   const profile = profileQuery.data
@@ -123,7 +137,13 @@ export function AuthPage() {
 
   if (profile) {
     return (
-      <Stack sx={{ alignItems: 'center', justifyContent: 'center', minHeight: 'calc(100vh - 12rem)' }}>
+      <Stack
+        sx={{
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: 'calc(100vh - 12rem)',
+        }}
+      >
         <Box component="main" sx={{ maxWidth: '30rem', width: '100%' }}>
           <Stack spacing={1.5}>
             <Typography variant="overline" color="primary.main" sx={{ fontWeight: 700, letterSpacing: '0.08em' }}>
@@ -136,7 +156,13 @@ export function AuthPage() {
               {profile.email}
             </Typography>
             <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-              <Button type="button" variant="outlined" color="inherit" onClick={() => logoutMutation.mutate()} disabled={logoutMutation.isPending}>
+              <Button
+                type="button"
+                variant="outlined"
+                color="inherit"
+                onClick={() => logoutMutation.mutate()}
+                disabled={logoutMutation.isPending}
+              >
                 Sign out
               </Button>
               <Link component={RouterLink} to="/dashboard">
@@ -151,7 +177,13 @@ export function AuthPage() {
   }
 
   return (
-    <Stack sx={{ alignItems: 'center', justifyContent: 'center', minHeight: 'calc(100vh - 12rem)' }}>
+    <Stack
+      sx={{
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: 'calc(100vh - 12rem)',
+      }}
+    >
       <Box component="main" sx={{ maxWidth: '26rem', width: '100%' }}>
         <Stack spacing={1.5} sx={{ mb: 3 }}>
           <Typography variant="overline" color="primary.main" sx={{ fontWeight: 700, letterSpacing: '0.08em' }}>
@@ -166,60 +198,84 @@ export function AuthPage() {
         </Stack>
         <Card>
           <CardContent>
-            <form onSubmit={handleSubmit(onSubmit)} noValidate>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault()
+                void form.handleSubmit()
+              }}
+              noValidate
+            >
               <Stack spacing={2}>
                 {mode === 'register' && (
-                  <TextField
-                    label="Display name"
-                    autoComplete="name"
-                    error={!!errors.displayName}
-                    helperText={errors.displayName?.message}
-                    slotProps={{
-                      htmlInput: { maxLength: 80 },
-                      formHelperText: { role: 'alert' },
-                    }}
-                    {...register('displayName')}
-                  />
+                  <form.Field name="displayName">
+                    {(field) => (
+                      <TextField
+                        label="Display name"
+                        autoComplete="name"
+                        value={field.state.value}
+                        onChange={(event) => field.handleChange(event.target.value)}
+                        onBlur={field.handleBlur}
+                        error={field.state.meta.errors.length > 0}
+                        helperText={firstErrorMessage(field.state.meta.errors)}
+                        slotProps={{
+                          htmlInput: { maxLength: 80 },
+                          formHelperText: { role: 'alert' },
+                        }}
+                      />
+                    )}
+                  </form.Field>
                 )}
-                <TextField
-                  label="Email"
-                  type="email"
-                  autoComplete="email"
-                  error={!!errors.email}
-                  helperText={errors.email?.message}
-                  slotProps={{
-                    htmlInput: { maxLength: 320 },
-                    formHelperText: { role: 'alert' },
-                  }}
-                  {...register('email')}
-                />
-                <TextField
-                  label="Password"
-                  type={showPassword ? 'text' : 'password'}
-                  autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                  error={!!errors.password}
-                  helperText={errors.password?.message}
-                  slotProps={{
-                    htmlInput: { maxLength: 128 },
-                    formHelperText: { role: 'alert' },
-                    input: {
-                      endAdornment: (
-                        <InputAdornment position="end">
-                          <IconButton
-                            type="button"
-                            edge="end"
-                            size="small"
-                            aria-label={showPassword ? 'Hide password' : 'Show password'}
-                            onClick={() => setShowPassword((current) => !current)}
-                          >
-                            {showPassword ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
-                          </IconButton>
-                        </InputAdornment>
-                      ),
-                    },
-                  }}
-                  {...register('password')}
-                />
+                <form.Field name="email">
+                  {(field) => (
+                    <TextField
+                      label="Email"
+                      type="email"
+                      autoComplete="email"
+                      value={field.state.value}
+                      onChange={(event) => field.handleChange(event.target.value)}
+                      onBlur={field.handleBlur}
+                      error={field.state.meta.errors.length > 0}
+                      helperText={firstErrorMessage(field.state.meta.errors)}
+                      slotProps={{
+                        htmlInput: { maxLength: 320 },
+                        formHelperText: { role: 'alert' },
+                      }}
+                    />
+                  )}
+                </form.Field>
+                <form.Field name="password">
+                  {(field) => (
+                    <TextField
+                      label="Password"
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                      value={field.state.value}
+                      onChange={(event) => field.handleChange(event.target.value)}
+                      onBlur={field.handleBlur}
+                      error={field.state.meta.errors.length > 0}
+                      helperText={firstErrorMessage(field.state.meta.errors)}
+                      slotProps={{
+                        htmlInput: { maxLength: 128 },
+                        formHelperText: { role: 'alert' },
+                        input: {
+                          endAdornment: (
+                            <InputAdornment position="end">
+                              <IconButton
+                                type="button"
+                                edge="end"
+                                size="small"
+                                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                                onClick={() => setShowPassword((current) => !current)}
+                              >
+                                {showPassword ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                              </IconButton>
+                            </InputAdornment>
+                          ),
+                        },
+                      }}
+                    />
+                  )}
+                </form.Field>
                 <Button type="submit" variant="contained" disabled={authMutation.isPending}>
                   {authMutation.isPending ? 'Working...' : mode === 'login' ? 'Sign in' : 'Register'}
                 </Button>

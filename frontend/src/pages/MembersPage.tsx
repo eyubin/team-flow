@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Link as RouterLink, useParams } from 'react-router-dom'
-import { Controller, useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
+import { useForm } from '@tanstack/react-form'
 import { z } from 'zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { DataGrid, type GridColDef } from '@mui/x-data-grid'
@@ -22,6 +21,7 @@ import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import { isForbidden, request } from '../lib/api.ts'
+import { firstErrorMessage } from '../lib/formError.ts'
 import { Forbidden } from '../components/Forbidden.tsx'
 import { QueryError } from '../components/QueryError.tsx'
 import { StatusMessage, type StatusMessageValue } from '../components/StatusMessage.tsx'
@@ -76,7 +76,14 @@ export function MembersPage() {
   })
   const members = membersQuery.data ?? []
 
-  const memberForm = useForm<MemberValues>({ resolver: zodResolver(memberSchema), defaultValues: { email: '', role: 'MEMBER' } })
+  const memberForm = useForm({
+    defaultValues: { email: '', role: 'MEMBER' } as MemberValues,
+    validators: { onSubmit: memberSchema },
+    onSubmit: ({ value }) => {
+      setActionForbidden(false)
+      addMemberMutation.mutate(value)
+    },
+  })
 
   const addMemberMutation = useMutation({
     mutationFn: (values: MemberValues) =>
@@ -260,33 +267,44 @@ export function MembersPage() {
             <Card>
               <CardContent>
                 <form
-                  onSubmit={memberForm.handleSubmit((values) => {
-                    setActionForbidden(false)
-                    addMemberMutation.mutate(values)
-                  })}
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    void memberForm.handleSubmit()
+                  }}
                   noValidate
                 >
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', sm: 'flex-start' } }}>
-                    <TextField
-                      label="Email"
-                      type="email"
-                      fullWidth
-                      error={!!memberForm.formState.errors.email}
-                      helperText={memberForm.formState.errors.email?.message}
-                      slotProps={{ formHelperText: { role: 'alert' } }}
-                      {...memberForm.register('email')}
-                    />
-                    <Controller
-                      name="role"
-                      control={memberForm.control}
-                      render={({ field }) => (
-                        <TextField select label="Role" sx={{ minWidth: '10rem' }} {...field}>
+                    <memberForm.Field name="email">
+                      {(field) => (
+                        <TextField
+                          label="Email"
+                          type="email"
+                          fullWidth
+                          value={field.state.value}
+                          onChange={(event) => field.handleChange(event.target.value)}
+                          onBlur={field.handleBlur}
+                          error={field.state.meta.errors.length > 0}
+                          helperText={firstErrorMessage(field.state.meta.errors)}
+                          slotProps={{ formHelperText: { role: 'alert' } }}
+                        />
+                      )}
+                    </memberForm.Field>
+                    <memberForm.Field name="role">
+                      {(field) => (
+                        <TextField
+                          select
+                          label="Role"
+                          sx={{ minWidth: '10rem' }}
+                          value={field.state.value}
+                          onChange={(event) => field.handleChange(event.target.value as MemberValues['role'])}
+                          onBlur={field.handleBlur}
+                        >
                           <MenuItem value="MEMBER">Member</MenuItem>
                           <MenuItem value="VIEWER">Viewer</MenuItem>
                           <MenuItem value="ADMIN">Admin</MenuItem>
                         </TextField>
                       )}
-                    />
+                    </memberForm.Field>
                     <Button type="submit" variant="contained" disabled={addMemberMutation.isPending}>
                       Add member
                     </Button>

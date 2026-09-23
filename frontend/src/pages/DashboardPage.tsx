@@ -1,6 +1,5 @@
 import { useState } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
+import { useForm } from '@tanstack/react-form'
 import { z } from 'zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link as RouterLink } from 'react-router-dom'
@@ -15,6 +14,7 @@ import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import { isForbidden, request } from '../lib/api.ts'
+import { firstErrorMessage } from '../lib/formError.ts'
 import { Forbidden } from '../components/Forbidden.tsx'
 import { QueryError } from '../components/QueryError.tsx'
 import { StatusMessage, type StatusMessageValue } from '../components/StatusMessage.tsx'
@@ -69,8 +69,22 @@ export function DashboardPage() {
   })
   const projects = projectsQuery.data ?? []
 
-  const workspaceForm = useForm<WorkspaceValues>({ resolver: zodResolver(workspaceSchema), defaultValues: { name: '' } })
-  const projectForm = useForm<ProjectValues>({ resolver: zodResolver(projectSchema), defaultValues: { name: '' } })
+  const workspaceForm = useForm({
+    defaultValues: { name: '' } as WorkspaceValues,
+    validators: { onSubmit: workspaceSchema },
+    onSubmit: ({ value }) => {
+      setActionForbidden(false)
+      createWorkspaceMutation.mutate(value)
+    },
+  })
+  const projectForm = useForm({
+    defaultValues: { name: '' } as ProjectValues,
+    validators: { onSubmit: projectSchema },
+    onSubmit: ({ value }) => {
+      setActionForbidden(false)
+      createProjectMutation.mutate(value)
+    },
+  })
 
   const createWorkspaceMutation = useMutation({
     mutationFn: (values: WorkspaceValues) =>
@@ -138,21 +152,27 @@ export function DashboardPage() {
         <Card>
           <CardContent>
             <form
-              onSubmit={workspaceForm.handleSubmit((values) => {
-                setActionForbidden(false)
-                createWorkspaceMutation.mutate(values)
-              })}
+              onSubmit={(event) => {
+                event.preventDefault()
+                void workspaceForm.handleSubmit()
+              }}
               noValidate
             >
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', sm: 'flex-start' } }}>
-                <TextField
-                  label="New workspace"
-                  fullWidth
-                  error={!!workspaceForm.formState.errors.name}
-                  helperText={workspaceForm.formState.errors.name?.message}
-                  slotProps={{ htmlInput: { maxLength: 120 }, formHelperText: { role: 'alert' } }}
-                  {...workspaceForm.register('name')}
-                />
+                <workspaceForm.Field name="name">
+                  {(field) => (
+                    <TextField
+                      label="New workspace"
+                      fullWidth
+                      value={field.state.value}
+                      onChange={(event) => field.handleChange(event.target.value)}
+                      onBlur={field.handleBlur}
+                      error={field.state.meta.errors.length > 0}
+                      helperText={firstErrorMessage(field.state.meta.errors)}
+                      slotProps={{ htmlInput: { maxLength: 120 }, formHelperText: { role: 'alert' } }}
+                    />
+                  )}
+                </workspaceForm.Field>
                 <Button type="submit" variant="contained" disabled={createWorkspaceMutation.isPending}>
                   Create workspace
                 </Button>
@@ -182,21 +202,27 @@ export function DashboardPage() {
             <Card>
               <CardContent>
                 <form
-                  onSubmit={projectForm.handleSubmit((values) => {
-                    setActionForbidden(false)
-                    createProjectMutation.mutate(values)
-                  })}
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    void projectForm.handleSubmit()
+                  }}
                   noValidate
                 >
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', sm: 'flex-start' } }}>
-                    <TextField
-                      label="New project"
-                      fullWidth
-                      error={!!projectForm.formState.errors.name}
-                      helperText={projectForm.formState.errors.name?.message}
-                      slotProps={{ htmlInput: { maxLength: 120 }, formHelperText: { role: 'alert' } }}
-                      {...projectForm.register('name')}
-                    />
+                    <projectForm.Field name="name">
+                      {(field) => (
+                        <TextField
+                          label="New project"
+                          fullWidth
+                          value={field.state.value}
+                          onChange={(event) => field.handleChange(event.target.value)}
+                          onBlur={field.handleBlur}
+                          error={field.state.meta.errors.length > 0}
+                          helperText={firstErrorMessage(field.state.meta.errors)}
+                          slotProps={{ htmlInput: { maxLength: 120 }, formHelperText: { role: 'alert' } }}
+                        />
+                      )}
+                    </projectForm.Field>
                     <Button type="submit" variant="contained" disabled={createProjectMutation.isPending}>
                       Create project
                     </Button>
