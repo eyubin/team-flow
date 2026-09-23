@@ -1,13 +1,23 @@
-import { useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Link as RouterLink, useParams } from 'react-router-dom'
 import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  createColumnHelper,
+  createCoreRowModel,
+  createSortedRowModel,
+  flexRender,
+  rowSortingFeature,
+  sortFn_text,
+  tableFeatures,
+  useTable,
+  type SortingState,
+} from '@tanstack/react-table'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
-import ButtonBase from '@mui/material/ButtonBase'
 import Card from '@mui/material/Card'
 import CardContent from '@mui/material/CardContent'
 import Chip from '@mui/material/Chip'
@@ -20,6 +30,13 @@ import Divider from '@mui/material/Divider'
 import Link from '@mui/material/Link'
 import MenuItem from '@mui/material/MenuItem'
 import Stack from '@mui/material/Stack'
+import Table from '@mui/material/Table'
+import TableBody from '@mui/material/TableBody'
+import TableCell from '@mui/material/TableCell'
+import TableContainer from '@mui/material/TableContainer'
+import TableHead from '@mui/material/TableHead'
+import TableRow from '@mui/material/TableRow'
+import TableSortLabel from '@mui/material/TableSortLabel'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import { ApiError, isForbidden, request } from '../lib/api.ts'
@@ -55,6 +72,15 @@ const commentSchema = z.object({
 })
 type CommentValues = z.infer<typeof commentSchema>
 
+const taskTableFeatures = tableFeatures({
+  rowSortingFeature,
+  coreRowModel: createCoreRowModel(),
+  sortedRowModel: createSortedRowModel(),
+  sortFns: { text: sortFn_text },
+})
+
+const columnHelper = createColumnHelper<typeof taskTableFeatures, Task>()
+
 const STATUS_LABEL: Record<Task['status'], string> = { TODO: 'To do', IN_PROGRESS: 'In progress', DONE: 'Done' }
 const PRIORITY_COLOR: Record<Task['priority'], 'default' | 'warning' | 'error'> = { LOW: 'default', MEDIUM: 'warning', HIGH: 'error' }
 const STATUS_COLOR: Record<Task['status'], 'default' | 'primary' | 'success'> = { TODO: 'default', IN_PROGRESS: 'primary', DONE: 'success' }
@@ -85,6 +111,7 @@ export function TaskBoardPage() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [hasConflict, setHasConflict] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [sorting, setSorting] = useState<SortingState>([])
 
   const tasksQueryKey = ['tasks', projectId, filterStatus, filterPriority, assigneeFilter] as const
   const tasksQuery = useQuery({
@@ -185,12 +212,15 @@ export function TaskBoardPage() {
     },
   })
 
-  function selectTask(task: Task) {
-    setSelectedTaskId(task.id)
-    setHasConflict(false)
-    setActionForbidden(false)
-    editForm.reset(taskToFormValues(task))
-  }
+  const selectTask = useCallback(
+    (task: Task) => {
+      setSelectedTaskId(task.id)
+      setHasConflict(false)
+      setActionForbidden(false)
+      editForm.reset(taskToFormValues(task))
+    },
+    [editForm],
+  )
 
   async function reloadSelectedTask() {
     if (!selectedTask) return
@@ -213,6 +243,46 @@ export function TaskBoardPage() {
     setConfirmingDelete(false)
     deleteTaskMutation.mutate()
   }
+
+  const columns = useMemo(
+    () =>
+      columnHelper.columns([
+      columnHelper.accessor('title', {
+        header: 'Title',
+        sortFn: 'text',
+        cell: (info) => (
+          <Link
+            component="button"
+            type="button"
+            underline="hover"
+            onClick={() => selectTask(info.row.original)}
+            sx={{ fontWeight: 700, textAlign: 'left' }}
+          >
+            {info.getValue()}
+          </Link>
+        ),
+      }),
+      columnHelper.accessor('status', {
+        header: 'Status',
+        cell: (info) => (
+          <Chip size="small" color={STATUS_COLOR[info.getValue()]} label={STATUS_LABEL[info.getValue()]} />
+        ),
+      }),
+      columnHelper.accessor('priority', {
+        header: 'Priority',
+        cell: (info) => <Chip size="small" color={PRIORITY_COLOR[info.getValue()]} label={info.getValue()} />,
+      }),
+      ]),
+    [selectTask],
+  )
+
+  const table = useTable({
+    features: taskTableFeatures,
+    data: tasks,
+    columns,
+    state: { sorting },
+    onSortingChange: setSorting,
+  })
 
   const loading = tasksQuery.isLoading
   const forbidden = isForbidden(tasksQuery.error)
@@ -346,24 +416,39 @@ export function TaskBoardPage() {
             No tasks in this project yet.
           </Alert>
         ) : (
-          <Stack spacing={1.5}>
-            {tasks.map((task) => (
-              <Card key={task.id} variant={task.id === selectedTaskId ? 'elevation' : 'outlined'}>
-                <ButtonBase
-                  onClick={() => selectTask(task)}
-                  sx={{ width: '100%', justifyContent: 'flex-start', textAlign: 'left', p: 2 }}
-                >
-                  <Stack spacing={1} sx={{ width: '100%', alignItems: 'flex-start' }}>
-                    <Typography sx={{ fontWeight: 700 }}>{task.title}</Typography>
-                    <Stack direction="row" spacing={1}>
-                      <Chip size="small" color={STATUS_COLOR[task.status]} label={STATUS_LABEL[task.status]} />
-                      <Chip size="small" color={PRIORITY_COLOR[task.priority]} label={task.priority} />
-                    </Stack>
-                  </Stack>
-                </ButtonBase>
-              </Card>
-            ))}
-          </Stack>
+          <TableContainer component={Card}>
+            <Table aria-label="Tasks">
+              <TableHead>
+                {table.getHeaderGroups().map((headerGroup) => (
+                  <TableRow key={headerGroup.id}>
+                    {headerGroup.headers.map((header) => {
+                      const sorted = header.column.getIsSorted()
+                      return (
+                        <TableCell key={header.id} sortDirection={sorted === false ? false : sorted}>
+                          <TableSortLabel
+                            active={sorted !== false}
+                            direction={sorted === false ? 'asc' : sorted}
+                            onClick={() => header.column.toggleSorting()}
+                          >
+                            {flexRender(header.column.columnDef.header, header.getContext())}
+                          </TableSortLabel>
+                        </TableCell>
+                      )
+                    })}
+                  </TableRow>
+                ))}
+              </TableHead>
+              <TableBody>
+                {table.getRowModel().rows.map((row) => (
+                  <TableRow key={row.id} hover selected={row.original.id === selectedTaskId}>
+                    {row.getAllCells().map((cell) => (
+                      <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
         )}
 
         {selectedTask && (

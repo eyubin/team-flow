@@ -13,8 +13,11 @@ test('signs in, creates a project, and creates an assigned task', async ({ page 
 
   const taskButton = page.getByRole('button', { name: /Ship the release notes/ })
   await expect(taskButton).toBeVisible()
-  await expect(taskButton).toContainText('In progress')
-  await expect(taskButton).toContainText('HIGH')
+
+  // Status and priority are their own columns now, so they read off the row.
+  const taskRow = page.getByRole('row', { name: /Ship the release notes/ })
+  await expect(taskRow).toContainText('In progress')
+  await expect(taskRow).toContainText('HIGH')
 
   await taskButton.click()
   await expect(page.getByLabel('Task assignee ID')).toHaveValue(user.id)

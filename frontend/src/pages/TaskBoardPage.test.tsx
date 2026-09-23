@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { http, HttpResponse } from 'msw'
 import { server } from '../test/msw/server.ts'
@@ -54,6 +54,21 @@ describe('TaskBoardPage', () => {
     await user.click(await screen.findByRole('option', { name: 'Done' }))
 
     await waitFor(() => expect(requested.some((url) => url.includes('status=DONE'))).toBe(true))
+  })
+
+  it('sorts the board by title from the column header', async () => {
+    server.use(withTasks({ ...task, id: 'task-2', title: 'Zebra task' }, { ...task, id: 'task-3', title: 'Apple task' }))
+
+    const { user } = renderBoard()
+
+    const before = await screen.findAllByRole('row')
+    expect(within(before[1]).getByText('Zebra task')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Title' }))
+
+    await waitFor(() => {
+      expect(within(screen.getAllByRole('row')[1]).getByText('Apple task')).toBeInTheDocument()
+    })
   })
 
   it('shows a forbidden page when the project cannot be accessed', async () => {
