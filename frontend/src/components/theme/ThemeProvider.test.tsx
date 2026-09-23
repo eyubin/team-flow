@@ -1,6 +1,7 @@
 import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useTheme } from '@mui/material/styles'
 import { ThemeProvider } from './ThemeProvider.tsx'
 import { useThemePreference } from './theme-context.ts'
 
@@ -22,10 +23,13 @@ function stubMatchMedia(prefersDark: boolean) {
 
 function Probe() {
   const { preference, appearance, setPreference } = useThemePreference()
+  const muiTheme = useTheme()
   return (
     <div>
       <p data-testid="preference">{preference}</p>
       <p data-testid="appearance">{appearance}</p>
+      <p data-testid="mui-mode">{muiTheme.palette.mode}</p>
+      <p data-testid="mui-primary">{muiTheme.palette.primary.main}</p>
       <button type="button" onClick={() => setPreference('dark')}>
         Go dark
       </button>
@@ -58,6 +62,19 @@ describe('ThemeProvider', () => {
 
     expect(screen.getByTestId('preference')).toHaveTextContent('system')
     expect(screen.getByTestId('appearance')).toHaveTextContent('light')
+    expect(screen.getByTestId('mui-mode')).toHaveTextContent('light')
+  })
+
+  it('hands the resolved appearance to MUI as well as Radix', async () => {
+    const user = userEvent.setup()
+    renderProbe()
+
+    expect(screen.getByTestId('mui-mode')).toHaveTextContent('light')
+    expect(screen.getByTestId('mui-primary')).toHaveTextContent('#5b5bd6')
+
+    await user.click(screen.getByRole('button', { name: 'Go dark' }))
+
+    expect(screen.getByTestId('mui-mode')).toHaveTextContent('dark')
   })
 
   it('resolves a dark appearance when the system prefers dark', () => {
