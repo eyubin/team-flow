@@ -174,7 +174,7 @@ export function DashboardPage() {
                     />
                   )}
                 </workspaceForm.Field>
-                <Button type="submit" variant="contained" disabled={createWorkspaceMutation.isPending}>
+                <Button type="submit" variant="contained" disabled={createWorkspaceMutation.isPending} className="shrink-0 whitespace-nowrap">
                   Create workspace
                 </Button>
               </Stack>
@@ -224,7 +224,7 @@ export function DashboardPage() {
                         />
                       )}
                     </projectForm.Field>
-                    <Button type="submit" variant="contained" disabled={createProjectMutation.isPending}>
+                    <Button type="submit" variant="contained" disabled={createProjectMutation.isPending} className="shrink-0 whitespace-nowrap">
                       Create project
                     </Button>
                   </Stack>

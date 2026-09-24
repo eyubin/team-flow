@@ -306,7 +306,7 @@ export function MembersPage() {
                         </TextField>
                       )}
                     </memberForm.Field>
-                    <Button type="submit" variant="contained" disabled={addMemberMutation.isPending}>
+                    <Button type="submit" variant="contained" disabled={addMemberMutation.isPending} className="shrink-0 whitespace-nowrap">
                       Add member
                     </Button>
                   </Stack>
