@@ -534,7 +534,7 @@ export function TaskBoardPage() {
                   type="submit"
                   variant="contained"
                   disabled={createTaskMutation.isPending}
-                  sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}
+                  className="shrink-0 whitespace-nowrap"
                 >
                   Create task
                 </Button>
@@ -577,7 +577,7 @@ export function TaskBoardPage() {
                   value={assigneeFilter}
                   onChange={(event) => setAssigneeFilter(event.target.value)}
                 />
-                <Button type="submit" variant="outlined">
+                <Button type="submit" variant="outlined" className="shrink-0 whitespace-nowrap">
                   Apply filters
                 </Button>
                 <Button
@@ -699,7 +699,7 @@ export function TaskBoardPage() {
                       />
                     )}
                   </commentForm.Field>
-                  <Button type="submit" variant="contained" disabled={addCommentMutation.isPending}>
+                  <Button type="submit" variant="contained" disabled={addCommentMutation.isPending} className="shrink-0 whitespace-nowrap">
                     Add comment
                   </Button>
                 </Stack>

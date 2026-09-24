@@ -57,14 +57,7 @@ export function createAppTheme(appearance: ResolvedAppearance): Theme {
     components: {
       MuiCard: { defaultProps: { variant: 'outlined' } },
       MuiTextField: { defaultProps: { size: 'small' } },
-      MuiButton: {
-        defaultProps: { disableElevation: true },
-        styleOverrides: {
-          // Submit buttons sit beside inputs in flex rows; keep their label on
-          // one line instead of letting the row squeeze it into a wrap.
-          root: { '&[type="submit"]': { whiteSpace: 'nowrap', flexShrink: 0 } },
-        },
-      },
+      MuiButton: { defaultProps: { disableElevation: true } },
     },
   })
 }
