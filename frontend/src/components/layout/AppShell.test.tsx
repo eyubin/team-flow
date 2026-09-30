@@ -43,8 +43,8 @@ describe('AppShell', () => {
       { route: '/dashboard' },
     )
 
-    expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveClass('nav-link-active')
-    expect(screen.getByRole('link', { name: 'Status' })).not.toHaveClass('nav-link-active')
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Status' })).not.toHaveAttribute('aria-current')
   })
 
   it('hides the header once the page is scrolled down past the threshold', () => {
