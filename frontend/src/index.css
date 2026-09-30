@@ -41,8 +41,8 @@
 }
 
 /* Resets beyond MUI's CssBaseline. The header and navigation styling that
-   used to live here moved into AppShell's `sx`, so it reads from the MUI
+   used to live here moved into AppShell's styled components, so it reads from the MUI
    theme instead of Radix's CSS custom properties. */
 #root {
-  min-height: 100vh;
+  min-height: 100dvh;
 }

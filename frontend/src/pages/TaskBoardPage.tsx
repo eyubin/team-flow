@@ -45,6 +45,7 @@ import { queryKeys } from '../lib/queryKeys.ts'
 import { Forbidden } from '../components/Forbidden.tsx'
 import { QueryError } from '../components/QueryError.tsx'
 import { StatusMessage, type StatusMessageValue } from '../components/StatusMessage.tsx'
+import { SplitView } from '../components/layout/SplitView.tsx'
 import { useDocumentTitle } from '../lib/useDocumentTitle.ts'
 
 type Task = {
@@ -452,200 +453,204 @@ export function TaskBoardPage() {
 
   return (
     <Box component="main">
-      <Stack spacing={4}>
-        <Stack spacing={1.5}>
-          <Typography variant="overline" color="primary.main" sx={{ fontWeight: 700, letterSpacing: '0.08em' }}>
-            TeamFlow project
-          </Typography>
-          <Typography variant="h3" component="h1" sx={{ fontWeight: 700 }}>
-            Task board
-          </Typography>
-        </Stack>
+      <SplitView
+        start={
+          <Stack spacing={4}>
+            <Stack spacing={1.5}>
+              <Typography variant="overline" color="primary.main" sx={{ fontWeight: 700, letterSpacing: '0.08em' }}>
+                TeamFlow project
+              </Typography>
+              <Typography variant="h3" component="h1" sx={{ fontWeight: 700 }}>
+                Task board
+              </Typography>
+            </Stack>
 
-        <Card>
-          <CardContent>
-            <form
-              onSubmit={(event) => {
-                event.preventDefault()
-                void createForm.handleSubmit()
-              }}
-              noValidate
-            >
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', sm: 'flex-start' } }}>
-                <createForm.Field name="title">
-                  {(field) => (
-                    <TextField
-                      label="New task"
-                      sx={{ flexGrow: 1, minWidth: '12rem' }}
-                      value={field.state.value}
-                      onChange={(event) => field.handleChange(event.target.value)}
-                      onBlur={field.handleBlur}
-                      error={field.state.meta.errors.length > 0}
-                      helperText={firstErrorMessage(field.state.meta.errors)}
-                      slotProps={{ htmlInput: { maxLength: 200 }, formHelperText: { role: 'alert' } }}
-                    />
-                  )}
-                </createForm.Field>
-                <createForm.Field name="status">
-                  {(field) => (
+            <Card>
+              <CardContent>
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    void createForm.handleSubmit()
+                  }}
+                  noValidate
+                >
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', sm: 'flex-start' } }}>
+                    <createForm.Field name="title">
+                      {(field) => (
+                        <TextField
+                          label="New task"
+                          sx={{ flexGrow: 1, minWidth: '12rem' }}
+                          value={field.state.value}
+                          onChange={(event) => field.handleChange(event.target.value)}
+                          onBlur={field.handleBlur}
+                          error={field.state.meta.errors.length > 0}
+                          helperText={firstErrorMessage(field.state.meta.errors)}
+                          slotProps={{ htmlInput: { maxLength: 200 }, formHelperText: { role: 'alert' } }}
+                        />
+                      )}
+                    </createForm.Field>
+                    <createForm.Field name="status">
+                      {(field) => (
+                        <TextField
+                          select
+                          label="Status"
+                          sx={{ minWidth: '9rem' }}
+                          value={field.state.value}
+                          onChange={(event) => field.handleChange(event.target.value as Task['status'])}
+                          onBlur={field.handleBlur}
+                        >
+                          <MenuItem value="TODO">To do</MenuItem>
+                          <MenuItem value="IN_PROGRESS">In progress</MenuItem>
+                          <MenuItem value="DONE">Done</MenuItem>
+                        </TextField>
+                      )}
+                    </createForm.Field>
+                    <createForm.Field name="priority">
+                      {(field) => (
+                        <TextField
+                          select
+                          label="Priority"
+                          sx={{ minWidth: '9rem' }}
+                          value={field.state.value}
+                          onChange={(event) => field.handleChange(event.target.value as Task['priority'])}
+                          onBlur={field.handleBlur}
+                        >
+                          <MenuItem value="LOW">Low</MenuItem>
+                          <MenuItem value="MEDIUM">Medium</MenuItem>
+                          <MenuItem value="HIGH">High</MenuItem>
+                        </TextField>
+                      )}
+                    </createForm.Field>
+                    <createForm.Field name="assigneeId">
+                      {(field) => (
+                        <TextField
+                          label="Assignee ID"
+                          placeholder="Optional UUID"
+                          sx={{ minWidth: '10rem' }}
+                          value={field.state.value}
+                          onChange={(event) => field.handleChange(event.target.value)}
+                          onBlur={field.handleBlur}
+                        />
+                      )}
+                    </createForm.Field>
+                    <Button
+                      type="submit"
+                      variant="contained"
+                      disabled={createTaskMutation.isPending}
+                      className="shrink-0 whitespace-nowrap"
+                    >
+                      Create task
+                    </Button>
+                  </Stack>
+                </form>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent>
+                <form onSubmit={(event) => { event.preventDefault(); void tasksQuery.refetch() }}>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', sm: 'flex-start' }, flexWrap: 'wrap' }}>
                     <TextField
                       select
-                      label="Status"
-                      sx={{ minWidth: '9rem' }}
-                      value={field.state.value}
-                      onChange={(event) => field.handleChange(event.target.value as Task['status'])}
-                      onBlur={field.handleBlur}
+                      label="Filter status"
+                      sx={{ minWidth: '10rem' }}
+                      value={filterStatus || 'ALL'}
+                      onChange={(event) => setFilterStatus(event.target.value === 'ALL' ? '' : (event.target.value as Task['status']))}
                     >
+                      <MenuItem value="ALL">All statuses</MenuItem>
                       <MenuItem value="TODO">To do</MenuItem>
                       <MenuItem value="IN_PROGRESS">In progress</MenuItem>
                       <MenuItem value="DONE">Done</MenuItem>
                     </TextField>
-                  )}
-                </createForm.Field>
-                <createForm.Field name="priority">
-                  {(field) => (
                     <TextField
                       select
-                      label="Priority"
-                      sx={{ minWidth: '9rem' }}
-                      value={field.state.value}
-                      onChange={(event) => field.handleChange(event.target.value as Task['priority'])}
-                      onBlur={field.handleBlur}
+                      label="Filter priority"
+                      sx={{ minWidth: '10rem' }}
+                      value={filterPriority || 'ALL'}
+                      onChange={(event) => setFilterPriority(event.target.value === 'ALL' ? '' : (event.target.value as Task['priority']))}
                     >
+                      <MenuItem value="ALL">All priorities</MenuItem>
                       <MenuItem value="LOW">Low</MenuItem>
                       <MenuItem value="MEDIUM">Medium</MenuItem>
                       <MenuItem value="HIGH">High</MenuItem>
                     </TextField>
-                  )}
-                </createForm.Field>
-                <createForm.Field name="assigneeId">
-                  {(field) => (
                     <TextField
-                      label="Assignee ID"
+                      label="Filter by assignee ID"
                       placeholder="Optional UUID"
-                      sx={{ minWidth: '10rem' }}
-                      value={field.state.value}
-                      onChange={(event) => field.handleChange(event.target.value)}
-                      onBlur={field.handleBlur}
+                      value={assigneeFilter}
+                      onChange={(event) => setAssigneeFilter(event.target.value)}
                     />
-                  )}
-                </createForm.Field>
-                <Button
-                  type="submit"
-                  variant="contained"
-                  disabled={createTaskMutation.isPending}
-                  className="shrink-0 whitespace-nowrap"
-                >
-                  Create task
-                </Button>
-              </Stack>
-            </form>
-          </CardContent>
-        </Card>
+                    <Button type="submit" variant="outlined" className="shrink-0 whitespace-nowrap">
+                      Apply filters
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => { setFilterStatus(''); setFilterPriority(''); setAssigneeFilter('') }}
+                    >
+                      Clear
+                    </Button>
+                  </Stack>
+                </form>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardContent>
-            <form onSubmit={(event) => { event.preventDefault(); void tasksQuery.refetch() }}>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', sm: 'flex-start' }, flexWrap: 'wrap' }}>
-                <TextField
-                  select
-                  label="Filter status"
-                  sx={{ minWidth: '10rem' }}
-                  value={filterStatus || 'ALL'}
-                  onChange={(event) => setFilterStatus(event.target.value === 'ALL' ? '' : (event.target.value as Task['status']))}
-                >
-                  <MenuItem value="ALL">All statuses</MenuItem>
-                  <MenuItem value="TODO">To do</MenuItem>
-                  <MenuItem value="IN_PROGRESS">In progress</MenuItem>
-                  <MenuItem value="DONE">Done</MenuItem>
-                </TextField>
-                <TextField
-                  select
-                  label="Filter priority"
-                  sx={{ minWidth: '10rem' }}
-                  value={filterPriority || 'ALL'}
-                  onChange={(event) => setFilterPriority(event.target.value === 'ALL' ? '' : (event.target.value as Task['priority']))}
-                >
-                  <MenuItem value="ALL">All priorities</MenuItem>
-                  <MenuItem value="LOW">Low</MenuItem>
-                  <MenuItem value="MEDIUM">Medium</MenuItem>
-                  <MenuItem value="HIGH">High</MenuItem>
-                </TextField>
-                <TextField
-                  label="Filter by assignee ID"
-                  placeholder="Optional UUID"
-                  value={assigneeFilter}
-                  onChange={(event) => setAssigneeFilter(event.target.value)}
-                />
-                <Button type="submit" variant="outlined" className="shrink-0 whitespace-nowrap">
-                  Apply filters
-                </Button>
-                <Button
-                  type="button"
-                  onClick={() => { setFilterStatus(''); setFilterPriority(''); setAssigneeFilter('') }}
-                >
-                  Clear
-                </Button>
-              </Stack>
-            </form>
-          </CardContent>
-        </Card>
-
-        {tasks.length === 0 ? (
-          <Alert severity="info" role="status">
-            No tasks in this project yet.
-          </Alert>
-        ) : (
-          <TableContainer
-            component={Card}
-            ref={scrollRef}
-            sx={virtualize ? { maxHeight: VIRTUAL_VIEWPORT, overflowY: 'auto' } : undefined}
-          >
-            <Table aria-label="Tasks" stickyHeader={virtualize}>
-              <TableHead>
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <TableRow key={headerGroup.id}>
-                    {headerGroup.headers.map((header) => {
-                      const sorted = header.column.getIsSorted()
-                      return (
-                        <TableCell key={header.id} sortDirection={sorted === false ? false : sorted}>
-                          <TableSortLabel
-                            active={sorted !== false}
-                            direction={sorted === false ? 'asc' : sorted}
-                            onClick={() => header.column.toggleSorting()}
-                          >
-                            {flexRender(header.column.columnDef.header, header.getContext())}
-                          </TableSortLabel>
-                        </TableCell>
-                      )
-                    })}
-                  </TableRow>
-                ))}
-              </TableHead>
-              <TableBody>
-                {paddingTop > 0 && (
-                  <TableRow style={{ height: paddingTop }}>
-                    <TableCell colSpan={3} sx={{ p: 0, border: 0 }} />
-                  </TableRow>
-                )}
-                {(virtualize ? virtualRows.map((virtualRow) => rows[virtualRow.index]) : rows).map((row) => (
-                  <TableRow key={row.id} hover selected={row.original.id === selectedTaskId}>
-                    {row.getAllCells().map((cell) => (
-                      <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+            {tasks.length === 0 ? (
+              <Alert severity="info" role="status">
+                No tasks in this project yet.
+              </Alert>
+            ) : (
+              <TableContainer
+                component={Card}
+                ref={scrollRef}
+                sx={virtualize ? { maxHeight: VIRTUAL_VIEWPORT, overflowY: 'auto' } : undefined}
+              >
+                <Table aria-label="Tasks" stickyHeader={virtualize}>
+                  <TableHead>
+                    {table.getHeaderGroups().map((headerGroup) => (
+                      <TableRow key={headerGroup.id}>
+                        {headerGroup.headers.map((header) => {
+                          const sorted = header.column.getIsSorted()
+                          return (
+                            <TableCell key={header.id} sortDirection={sorted === false ? false : sorted}>
+                              <TableSortLabel
+                                active={sorted !== false}
+                                direction={sorted === false ? 'asc' : sorted}
+                                onClick={() => header.column.toggleSorting()}
+                              >
+                                {flexRender(header.column.columnDef.header, header.getContext())}
+                              </TableSortLabel>
+                            </TableCell>
+                          )
+                        })}
+                      </TableRow>
                     ))}
-                  </TableRow>
-                ))}
-                {paddingBottom > 0 && (
-                  <TableRow style={{ height: paddingBottom }}>
-                    <TableCell colSpan={3} sx={{ p: 0, border: 0 }} />
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        )}
-
-        {selectedTask && (
+                  </TableHead>
+                  <TableBody>
+                    {paddingTop > 0 && (
+                      <TableRow style={{ height: paddingTop }}>
+                        <TableCell colSpan={3} sx={{ p: 0, border: 0 }} />
+                      </TableRow>
+                    )}
+                    {(virtualize ? virtualRows.map((virtualRow) => rows[virtualRow.index]) : rows).map((row) => (
+                      <TableRow key={row.id} hover selected={row.original.id === selectedTaskId}>
+                        {row.getAllCells().map((cell) => (
+                          <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+                        ))}
+                      </TableRow>
+                    ))}
+                    {paddingBottom > 0 && (
+                      <TableRow style={{ height: paddingBottom }}>
+                        <TableCell colSpan={3} sx={{ p: 0, border: 0 }} />
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </Stack>
+        }
+        placeholder={<Typography component="p">Select a task to see its details here.</Typography>}
+        end={selectedTask && (
           <Stack component="section" aria-labelledby="task-detail-heading" spacing={2}>
             <Divider />
             <Typography variant="h5" component="h2" id="task-detail-heading" sx={{ fontWeight: 700 }}>
@@ -751,17 +756,20 @@ export function TaskBoardPage() {
             </Stack>
           </Stack>
         )}
-
-        {actionForbidden && (
-          <Alert severity="error">You don't have permission to do that. Your role in this project is read-only.</Alert>
-        )}
-        <StatusMessage value={message} />
-        <Typography component="p">
-          <Link component={RouterLink} to="/dashboard">
-            Back to dashboard
-          </Link>
-        </Typography>
-      </Stack>
+        footer={
+          <Stack spacing={4}>
+            {actionForbidden && (
+              <Alert severity="error">You don't have permission to do that. Your role in this project is read-only.</Alert>
+            )}
+            <StatusMessage value={message} />
+            <Typography component="p">
+              <Link component={RouterLink} to="/dashboard">
+                Back to dashboard
+              </Link>
+            </Typography>
+          </Stack>
+        }
+      />
 
       <Dialog
         open={confirmingDelete}
