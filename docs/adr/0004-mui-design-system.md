@@ -1,6 +1,6 @@
 # ADR 0004: MUI as the frontend design system
 
-- Status: Accepted, amended by [ADR 0005](0005-tailwind-utilities.md) (Tailwind utilities)
+- Status: Superseded by [ADR 0006](0006-angular-frontend.md) (Angular and Angular Material); previously amended by [ADR 0005](0005-tailwind-utilities.md)
 - Date: 2026-09-23
 
 ## Context

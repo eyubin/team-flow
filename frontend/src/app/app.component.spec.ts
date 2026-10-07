@@ -1,41 +1,42 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/angular'
 import { describe, expect, it } from 'vitest'
 import { http, HttpResponse } from 'msw'
-import { server } from './test/msw/server.ts'
-import { profile, workspace } from './test/msw/handlers.ts'
-import { renderWithProviders } from './test/render.tsx'
-import App from './App.tsx'
+import { server } from '../test/msw/server'
+import { profile, workspace } from '../test/msw/handlers'
+import { renderWithProviders } from '../test/render'
+import { AppComponent } from './app.component'
+import { routes } from './app.routes'
 
 const signedIn = http.get('/api/auth/me', () => HttpResponse.json(profile))
 
-describe('App routing', () => {
+describe('AppComponent routing', () => {
   it('shows the auth page at the root', async () => {
-    renderWithProviders(<App />)
+    await renderWithProviders(AppComponent, { routes })
 
     expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
   })
 
   it('serves the public status page without a session', async () => {
-    renderWithProviders(<App />, { route: '/status' })
+    await renderWithProviders(AppComponent, { routes, route: '/status' })
 
     expect(await screen.findByText('API is UP')).toBeInTheDocument()
   })
 
   it('renders the not-found page for an unknown route', async () => {
-    renderWithProviders(<App />, { route: '/nowhere' })
+    await renderWithProviders(AppComponent, { routes, route: '/nowhere' })
 
     expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Back to home' })).toHaveAttribute('href', '/')
   })
 
   it('redirects /auth to the root', async () => {
-    renderWithProviders(<App />, { route: '/auth' })
+    await renderWithProviders(AppComponent, { routes, route: '/auth' })
 
     expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
   })
 
   it('guards the dashboard behind a session', async () => {
-    renderWithProviders(<App />, { route: '/dashboard' })
+    await renderWithProviders(AppComponent, { routes, route: '/dashboard' })
 
     expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
   })
@@ -43,7 +44,7 @@ describe('App routing', () => {
   it('lets a signed-in user reach the dashboard', async () => {
     server.use(signedIn, http.get('/api/workspaces', () => HttpResponse.json([workspace])))
 
-    renderWithProviders(<App />, { route: '/dashboard' })
+    await renderWithProviders(AppComponent, { routes, route: '/dashboard' })
 
     expect(await screen.findByRole('heading', { name: 'Project dashboard' })).toBeInTheDocument()
   })
@@ -56,7 +57,7 @@ describe('App routing', () => {
       http.get('/api/workspaces', () => new HttpResponse(null, { status: 401 })),
     )
 
-    renderWithProviders(<App />, { route: '/dashboard' })
+    await renderWithProviders(AppComponent, { routes, route: '/dashboard' })
 
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Sign in' })).toBeInTheDocument())
   })
@@ -66,7 +67,7 @@ describe('App routing', () => {
   it('signs out when another tab reports the session has ended', async () => {
     server.use(signedIn, http.get('/api/workspaces', () => HttpResponse.json([workspace])))
 
-    renderWithProviders(<App />, { route: '/dashboard' })
+    await renderWithProviders(AppComponent, { routes, route: '/dashboard' })
     expect(await screen.findByRole('heading', { name: 'Project dashboard' })).toBeInTheDocument()
 
     server.use(http.get('/api/auth/me', () => new HttpResponse(null, { status: 401 })))

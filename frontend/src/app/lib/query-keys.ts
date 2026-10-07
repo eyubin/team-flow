@@ -5,7 +5,7 @@ export type TaskFilters = {
 }
 
 /**
- * Single source of truth for React Query cache keys.
+ * Single source of truth for TanStack Query cache keys.
  *
  * Keys were previously written inline at each call site, which made the
  * relationship between a query and the invalidation meant to refresh it

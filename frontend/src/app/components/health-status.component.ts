@@ -1,9 +1,6 @@
-import { useEffect, useState } from 'react'
-import Card from '@mui/material/Card'
-import CardContent from '@mui/material/CardContent'
-import Chip from '@mui/material/Chip'
-import Stack from '@mui/material/Stack'
-import Typography from '@mui/material/Typography'
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core'
+import { MatCard, MatCardContent } from '@angular/material/card'
+import { BadgeComponent, type BadgeTone } from './badge.component'
 
 type HealthState = 'loading' | 'ok' | 'error'
 
@@ -11,18 +8,38 @@ type HealthBody = {
   status?: string
 }
 
-const BADGE_BY_STATE: Record<HealthState, { color: 'default' | 'success' | 'error'; label: string }> = {
-  loading: { color: 'default', label: 'Checking' },
-  ok: { color: 'success', label: 'Healthy' },
-  error: { color: 'error', label: 'Unavailable' },
+const BADGE_BY_STATE: Record<HealthState, { tone: BadgeTone; label: string }> = {
+  loading: { tone: 'default', label: 'Checking' },
+  ok: { tone: 'success', label: 'Healthy' },
+  error: { tone: 'error', label: 'Unavailable' },
 }
 
-export function HealthStatus() {
-  const [state, setState] = useState<HealthState>('loading')
-  const [message, setMessage] = useState('Checking API…')
+@Component({
+  selector: 'app-health-status',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [BadgeComponent, MatCard, MatCardContent],
+  template: `
+    <mat-card appearance="outlined" class="app-card" aria-live="polite">
+      <section>
+        <mat-card-content>
+          <div class="mb-2 flex items-center justify-between gap-3">
+            <h2 class="subsection-title">API health</h2>
+            <app-badge [tone]="badge().tone">{{ badge().label }}</app-badge>
+          </div>
+          <p class="muted">{{ state() === 'loading' ? 'Loading' : message() }}</p>
+        </mat-card-content>
+      </section>
+    </mat-card>
+  `,
+})
+export class HealthStatusComponent {
+  protected readonly state = signal<HealthState>('loading')
+  protected readonly message = signal('Checking API…')
+  protected readonly badge = computed(() => BADGE_BY_STATE[this.state()])
 
-  useEffect(() => {
+  constructor() {
     const controller = new AbortController()
+    inject(DestroyRef).onDestroy(() => controller.abort())
 
     fetch('/actuator/health', { credentials: 'include', signal: controller.signal })
       .then(async (response) => {
@@ -33,39 +50,19 @@ export function HealthStatus() {
       })
       .then((body) => {
         if (body.status === 'UP') {
-          setState('ok')
-          setMessage('API is UP')
+          this.state.set('ok')
+          this.message.set('API is UP')
           return
         }
-        setState('error')
-        setMessage(`API reported ${body.status ?? 'an unknown status'}`)
+        this.state.set('error')
+        this.message.set(`API reported ${body.status ?? 'an unknown status'}`)
       })
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === 'AbortError') {
           return
         }
-        setState('error')
-        setMessage(error instanceof Error ? error.message : 'API is unreachable')
+        this.state.set('error')
+        this.message.set(error instanceof Error ? error.message : 'API is unreachable')
       })
-
-    return () => controller.abort()
-  }, [])
-
-  const badge = BADGE_BY_STATE[state]
-
-  return (
-    <Card component="section" aria-live="polite">
-      <CardContent>
-        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-          <Typography variant="h6" component="h2">
-            API health
-          </Typography>
-          <Chip color={badge.color} label={badge.label} size="small" variant="outlined" />
-        </Stack>
-        <Typography component="p" color="text.secondary">
-          {state === 'loading' ? 'Loading' : message}
-        </Typography>
-      </CardContent>
-    </Card>
-  )
+  }
 }

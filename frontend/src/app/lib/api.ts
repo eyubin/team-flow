@@ -17,13 +17,13 @@ export function csrfToken() {
 
 let unauthorizedHandler: (() => void) | null = null
 
-// Lets App register a redirect-to-login for session expiry that happens mid-page,
-// after RequireAuth has already let the user in.
+// Lets the root component register a redirect-to-login for session expiry that
+// happens mid-page, after RequireAuth has already let the user in.
 export function onUnauthorized(handler: (() => void) | null) {
   unauthorizedHandler = handler
 }
 
-export async function request(url: string, options: RequestInit = {}) {
+export async function request<T = unknown>(url: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(url, {
     ...options,
     credentials: 'include',
@@ -40,5 +40,5 @@ export async function request(url: string, options: RequestInit = {}) {
     const problem = (await response.json().catch(() => null)) as { detail?: string } | null
     throw new ApiError(response.status, problem?.detail)
   }
-  return response.status === 204 ? null : response.json()
+  return (response.status === 204 ? null : await response.json()) as T
 }

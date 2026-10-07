@@ -1,26 +1,26 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/angular'
 import { describe, expect, it } from 'vitest'
 import { http, HttpResponse } from 'msw'
-import { server } from '../test/msw/server.ts'
-import { member, problem, workspace } from '../test/msw/handlers.ts'
-import { renderWithProviders } from '../test/render.tsx'
-import { MembersPage } from './MembersPage.tsx'
+import { server } from '../../test/msw/server'
+import { member, problem, workspace } from '../../test/msw/handlers'
+import { renderWithProviders } from '../../test/render'
+import { MembersPageComponent } from './members-page.component'
 
 const withWorkspaces = http.get('/api/workspaces', () => HttpResponse.json([workspace]))
 const withMembers = http.get('/api/workspaces/:workspaceId/members', () => HttpResponse.json([member]))
 
 function renderMembers() {
-  return renderWithProviders(<MembersPage />, {
+  return renderWithProviders(MembersPageComponent, {
     route: '/workspaces/workspace-1/members',
     path: '/workspaces/:workspaceId/members',
   })
 }
 
-describe('MembersPage', () => {
+describe('MembersPageComponent', () => {
   it('lists the workspace members', async () => {
     server.use(withWorkspaces, withMembers)
 
-    renderMembers()
+    await renderMembers()
 
     expect(await screen.findByRole('heading', { name: 'Members – Acme' })).toBeInTheDocument()
     expect(screen.getByText('Grace Hopper')).toBeInTheDocument()
@@ -38,7 +38,7 @@ describe('MembersPage', () => {
       }),
     )
 
-    const { user } = renderMembers()
+    const { user } = await renderMembers()
 
     await user.type(await screen.findByLabelText('Email'), 'grace@example.com')
     await user.click(screen.getByLabelText('Role', { exact: true }))
@@ -52,7 +52,7 @@ describe('MembersPage', () => {
   it('rejects an invalid email before calling the API', async () => {
     server.use(withWorkspaces, withMembers)
 
-    const { user } = renderMembers()
+    const { user } = await renderMembers()
 
     await user.type(await screen.findByLabelText('Email'), 'not-an-email')
     await user.click(screen.getByRole('button', { name: 'Add member' }))
@@ -71,7 +71,7 @@ describe('MembersPage', () => {
       }),
     )
 
-    const { user } = renderMembers()
+    const { user } = await renderMembers()
 
     await user.click(await screen.findByLabelText('Role for Grace Hopper'))
     await user.click(await screen.findByRole('option', { name: 'Viewer' }))
@@ -91,7 +91,7 @@ describe('MembersPage', () => {
       }),
     )
 
-    const { user } = renderMembers()
+    const { user } = await renderMembers()
 
     await user.click(await screen.findByRole('button', { name: 'Remove' }))
 
@@ -109,7 +109,7 @@ describe('MembersPage', () => {
     const ada = { userId: 'user-3', email: 'ada@example.com', displayName: 'Ada Lovelace', role: 'ADMIN' as const }
     server.use(withWorkspaces, http.get('/api/workspaces/:workspaceId/members', () => HttpResponse.json([member, ada])))
 
-    const { user } = renderMembers()
+    const { user } = await renderMembers()
 
     const firstNameBefore = (await screen.findAllByRole('row'))[1]
     expect(within(firstNameBefore).getByText('Grace Hopper')).toBeInTheDocument()
@@ -125,7 +125,7 @@ describe('MembersPage', () => {
   it('shows the forbidden page when the member list is not accessible', async () => {
     server.use(withWorkspaces, http.get('/api/workspaces/:workspaceId/members', () => problem(403, 'Nope')))
 
-    renderMembers()
+    await renderMembers()
 
     expect(await screen.findByRole('heading', { name: /don't have permission to view this/ })).toBeInTheDocument()
   })

@@ -1,123 +1,166 @@
-import type { ReactNode } from 'react'
-import { useEffect, useRef, useState } from 'react'
-import { NavLink, Link as RouterLink } from 'react-router-dom'
-import Box from '@mui/material/Box'
-import Container from '@mui/material/Container'
-import Stack from '@mui/material/Stack'
-import Typography from '@mui/material/Typography'
-import { alpha, styled } from '@mui/material/styles'
-import { ThemeToggle } from '../theme/ThemeToggle.tsx'
-import { SPANNING, SPLIT_VIEW_CLASS, START_SEGMENT_WIDTH } from './fold.ts'
+import { ChangeDetectionStrategy, Component, ViewEncapsulation, signal } from '@angular/core'
+import { RouterLink, RouterLinkActive } from '@angular/router'
+import { ThemeToggleComponent } from '../theme/theme-toggle.component'
 
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/status', label: 'Status' },
 ]
 
-const Header = styled('header')(({ theme }) => ({
-  position: 'sticky',
-  top: 0,
-  zIndex: 10,
-  backdropFilter: 'blur(8px)',
-  borderBottom: `1px solid ${theme.palette.divider}`,
-  backgroundColor: alpha(theme.palette.background.default, 0.8),
-  transition: 'transform 0.25s ease',
-  '&.app-header-hidden': { transform: 'translateY(-100%)' },
-}))
+// Past this many pixels of movement a scroll counts; below it, trackpad
+// jitter would flap the header.
+const SCROLL_THRESHOLD = 8
+const HEADER_HEIGHT = 64
 
-const BrandLink = styled(RouterLink)(({ theme }) => ({
-  color: theme.palette.text.primary,
-  textDecoration: 'none',
-  '&:hover': { color: theme.palette.primary.main },
-}))
-
-// NavLink sets aria-current="page" on the link for the current route.
-const NavItem = styled(NavLink)(({ theme }) => ({
-  color: theme.palette.text.secondary,
-  textDecoration: 'none',
-  fontSize: theme.typography.body2.fontSize,
-  fontWeight: 500,
-  paddingBlock: theme.spacing(0.5),
-  borderBottom: '2px solid transparent',
-  '&:hover': { color: theme.palette.text.primary },
-  '&[aria-current="page"]': {
-    color: theme.palette.primary.main,
-    borderBottomColor: theme.palette.primary.main,
+/**
+ * Unencapsulated, because the dual-screen rules below reach the `main` of
+ * whichever page is projected in - and those elements belong to the page.
+ * Everything is scoped under `.app-shell` instead.
+ */
+@Component({
+  selector: 'app-shell',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  encapsulation: ViewEncapsulation.None,
+  imports: [RouterLink, RouterLinkActive, ThemeToggleComponent],
+  host: {
+    class: 'app-shell',
+    '(window:scroll)': 'onScroll()',
   },
-}))
+  template: `
+    <header class="app-header" [class.app-header-hidden]="hidden()">
+      <div class="app-shell-container">
+        <div class="app-header-bar">
+          <a class="app-brand" routerLink="/">TeamFlow</a>
+          <nav aria-label="Primary" class="flex items-center gap-4">
+            @for (item of navItems; track item.to) {
+              <a class="app-nav-item" [routerLink]="item.to" routerLinkActive="active" ariaCurrentWhenActive="page">{{
+                item.label
+              }}</a>
+            }
+          </nav>
+          <app-theme-toggle />
+        </div>
+      </div>
+    </header>
+    <div class="app-shell-container app-shell-content">
+      <ng-content />
+    </div>
+  `,
+  styles: `
+    .app-shell {
+      display: block;
+      min-height: 100dvh;
+    }
 
-// Hides the header once the page has scrolled past it and the user is
-// scrolling down; a small threshold avoids flicker from trackpad jitter.
-function useHeaderHidden() {
-  const [hidden, setHidden] = useState(false)
-  const lastY = useRef(0)
+    .app-header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--mat-sys-outline-variant);
+      background-color: color-mix(in srgb, var(--mat-sys-surface) 80%, transparent);
+      transition: transform 0.25s ease;
+    }
 
-  useEffect(() => {
-    lastY.current = window.scrollY
-    function onScroll() {
-      const y = window.scrollY
-      const delta = y - lastY.current
-      if (Math.abs(delta) > 8) {
-        setHidden(delta > 0 && y > 64)
-        lastY.current = y
+    .app-header.app-header-hidden {
+      transform: translateY(-100%);
+    }
+
+    .app-shell-container {
+      width: 100%;
+      max-width: 900px;
+      margin-inline: auto;
+      padding-inline: 16px;
+    }
+
+    .app-header-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding-block: 8px;
+    }
+
+    .app-shell-content {
+      padding-block: 24px;
+    }
+
+    @media (min-width: 600px) {
+      .app-shell-container {
+        padding-inline: 24px;
+      }
+      .app-header-bar {
+        padding-block: 12px;
+      }
+      .app-shell-content {
+        padding-block: 40px;
       }
     }
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
 
-  return hidden
-}
+    .app-brand {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--mat-sys-on-surface);
+      text-decoration: none;
+    }
 
-export function AppShell({ children }: { children: ReactNode }) {
-  const hidden = useHeaderHidden()
+    .app-brand:hover {
+      color: var(--mat-sys-primary);
+    }
 
-  return (
-    <Box sx={{ minHeight: '100dvh' }}>
-      <Header className={hidden ? 'app-header-hidden' : undefined}>
-        <Container maxWidth="md" sx={{ [SPANNING]: { maxWidth: 'none', px: 0 } }}>
-          <Stack
-            direction="row"
-            spacing={2}
-            sx={{
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              // Matches the breakpoint the rest of the layout adapts at.
-              paddingBlock: { xs: 1, sm: 1.5 },
-              // Kept on the first segment so the nav never straddles the hinge.
-              [SPANNING]: { width: START_SEGMENT_WIDTH, px: 3 },
-            }}
-          >
-            <Typography variant="h6" sx={{ fontWeight: 700 }}>
-              <BrandLink to="/">TeamFlow</BrandLink>
-            </Typography>
-            <Stack component="nav" aria-label="Primary" direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-              {NAV_ITEMS.map((item) => (
-                <NavItem key={item.to} to={item.to}>
-                  {item.label}
-                </NavItem>
-              ))}
-            </Stack>
-            <ThemeToggle />
-          </Stack>
-        </Container>
-      </Header>
-      <Container
-        maxWidth="md"
-        sx={{
-          paddingBlock: { xs: 3, sm: 5 },
-          // Spanned across two segments, a page stays on the first one unless
-          // it lays itself out across both with SplitView.
-          [SPANNING]: {
-            maxWidth: 'none',
-            px: 0,
-            '& > main': { width: START_SEGMENT_WIDTH, px: 3 },
-            [`& > main:has(> .${SPLIT_VIEW_CLASS})`]: { width: 'auto', px: 0 },
-          },
-        }}
-      >
-        {children}
-      </Container>
-    </Box>
-  )
+    .app-nav-item {
+      color: var(--mat-sys-on-surface-variant);
+      text-decoration: none;
+      font-size: 0.875rem;
+      font-weight: 500;
+      padding-block: 4px;
+      border-bottom: 2px solid transparent;
+    }
+
+    .app-nav-item:hover {
+      color: var(--mat-sys-on-surface);
+    }
+
+    .app-nav-item.active {
+      color: var(--mat-sys-primary);
+      border-bottom-color: var(--mat-sys-primary);
+    }
+
+    /* Dual-screen and unfolded foldable devices spanning the page across both
+       segments, with the hinge as a vertical strip between them. The env()
+       values come from the Viewport Segments API; browsers without it never
+       match the query. A page stays on the first segment unless it lays itself
+       out across both with app-split-view; the nav never straddles the hinge. */
+    @media (horizontal-viewport-segments: 2) {
+      .app-shell-container {
+        max-width: none;
+        padding-inline: 0;
+      }
+      .app-header-bar,
+      .app-shell-content main {
+        width: env(viewport-segment-width 0 0);
+        padding-inline: 24px;
+      }
+      .app-shell-content main:has(> app-split-view) {
+        width: auto;
+        padding-inline: 0;
+      }
+    }
+  `,
+})
+export class AppShellComponent {
+  protected readonly navItems = NAV_ITEMS
+  protected readonly hidden = signal(false)
+  private lastY = window.scrollY
+
+  // Hides the header once the page has scrolled past it and the user is
+  // scrolling down.
+  protected onScroll() {
+    const y = window.scrollY
+    const delta = y - this.lastY
+    if (Math.abs(delta) > SCROLL_THRESHOLD) {
+      this.hidden.set(delta > 0 && y > HEADER_HEIGHT)
+      this.lastY = y
+    }
+  }
 }

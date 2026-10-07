@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { http, HttpResponse } from 'msw'
-import { server } from '../test/msw/server.ts'
-import { ApiError, csrfToken, isForbidden, onUnauthorized, request } from './api.ts'
+import { server } from '../../test/msw/server'
+import { ApiError, csrfToken, isForbidden, onUnauthorized, request } from './api'
 
 afterEach(() => {
   onUnauthorized(null)
@@ -63,7 +63,7 @@ describe('request', () => {
   })
 
   it('notifies the unauthorized handler when the session has expired', async () => {
-    const handler = vi.fn()
+    const handler = vi.fn<() => void>()
     onUnauthorized(handler)
     server.use(http.get('/api/workspaces', () => new HttpResponse(null, { status: 401 })))
 
@@ -72,7 +72,7 @@ describe('request', () => {
   })
 
   it('stops notifying once the handler is cleared', async () => {
-    const handler = vi.fn()
+    const handler = vi.fn<() => void>()
     onUnauthorized(handler)
     onUnauthorized(null)
     server.use(http.get('/api/workspaces', () => new HttpResponse(null, { status: 401 })))

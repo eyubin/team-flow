@@ -3,7 +3,7 @@
 [![CI](https://github.com/eyubin/team-flow/actions/workflows/ci.yml/badge.svg)](https://github.com/eyubin/team-flow/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/eyubin/team-flow/actions/workflows/codeql.yml/badge.svg)](https://github.com/eyubin/team-flow/actions/workflows/codeql.yml)
 
-A compact project and task management system — React SPA, Spring Boot modular monolith, PostgreSQL — built to show a complete engineering lifecycle: design, roles and authorization, optimistic locking, a real test pyramid, and a CI pipeline with security gates.
+A compact project and task management system — Angular SPA, Spring Boot modular monolith, PostgreSQL — built to show a complete engineering lifecycle: design, roles and authorization, optimistic locking, a real test pyramid, and a CI pipeline with security gates.
 
 ![Task board with a selected task, comments, and history](docs/screenshot.png)
 
@@ -23,7 +23,7 @@ Stop with `make down`. Demo data (below) is seeded automatically on first startu
 
 ### Hot reload inside Docker
 
-`make up` builds the SPA as a static production bundle, so frontend edits need a rebuild. For a full Docker stack where the SPA hot-reloads on save instead, use `make dev`: it runs the same Postgres and API containers but swaps the frontend for the Vite dev server (source mounted as a volume, proxying `/api` and `/actuator` to the `backend` container). Same URL, `http://localhost:3000`. Stop with `make down`.
+`make up` builds the SPA as a static production bundle, so frontend edits need a rebuild. For a full Docker stack where the SPA hot-reloads on save instead, use `make dev`: it runs the same Postgres and API containers but swaps the frontend for the Angular dev server (source mounted as a volume, proxying `/api` and `/actuator` to the `backend` container). Same URL, `http://localhost:3000`. Stop with `make down`.
 
 ## Local development (without Docker)
 
@@ -51,7 +51,7 @@ Requires Java 25 and Node 20+. Postgres still runs via Compose; the backend and 
 
    Flyway migrations run automatically on startup. `./mvnw -B verify` runs the full test suite (needs Docker for Testcontainers).
 
-3. In a separate terminal, run the frontend (Vite dev server, port 5173, proxies `/api` and `/actuator` to `localhost:8080`):
+3. In a separate terminal, run the frontend (Angular dev server, port 5173, proxies `/api` and `/actuator` to `localhost:8080`):
 
    ```bash
    cd frontend
@@ -87,7 +87,7 @@ Sign in at http://localhost:3000/auth, then open **Demo Workspace → Demo Proje
 
 ## Architecture
 
-TeamFlow is a **modular monolith**: one Spring Boot process, one PostgreSQL database, one React SPA — a deliberate choice over microservices at this scale (see [ADR 0001](docs/adr/0001-modular-monolith.md)).
+TeamFlow is a **modular monolith**: one Spring Boot process, one PostgreSQL database, one Angular SPA — a deliberate choice over microservices at this scale (see [ADR 0001](docs/adr/0001-modular-monolith.md)).
 
 ```mermaid
 C4Container
@@ -96,7 +96,7 @@ C4Container
   Person(user, "User")
 
   Container_Boundary(browser, "Browser") {
-    Container(spa, "Web SPA", "React, TypeScript, Vite", "Login, board, members, history")
+    Container(spa, "Web SPA", "Angular, TypeScript, Angular Material", "Login, board, members, history")
   }
 
   Container_Boundary(compose, "Docker Compose (local / CI)") {
@@ -115,8 +115,8 @@ The backend is organized by business capability (`auth`, `workspace`, `task`, `a
 
 | Layer | Stack | Why |
 | --- | --- | --- |
-| Frontend | React 19, TypeScript, Vite, React Router, MUI + MUI X DataGrid, Tailwind CSS, TanStack Query/Table/Form/Virtual, Zod | Server state and caching handled by Query instead of hand-rolled `useState`/`fetch`; forms get schema-validated, typed submission with inline error messages instead of relying on native HTML validation; MUI supplies one component vocabulary and the light/dark theme ([ADR 0004](docs/adr/0004-mui-design-system.md)), with Tailwind utilities for layout reading the same palette ([ADR 0005](docs/adr/0005-tailwind-utilities.md)) |
-| Frontend tests | Vitest, React Testing Library, Playwright | Component tests close to the code, E2E against the real Compose stack (no mocking) |
+| Frontend | Angular 22 (standalone components, signals, zoneless), TypeScript, Angular Router, Angular Material, Tailwind CSS, TanStack Angular Query, TanStack Virtual, Reactive Forms with Angular validators | Server state and caching handled by Query instead of hand-rolled services; forms get schema-validated, typed submission with inline error messages instead of relying on native HTML validation; Angular Material supplies one component vocabulary and the light/dark theme ([ADR 0006](docs/adr/0006-angular-frontend.md)), with Tailwind utilities for layout reading the same palette ([ADR 0005](docs/adr/0005-tailwind-utilities.md)) |
+| Frontend tests | Vitest (via `ng test`), Angular Testing Library, MSW, Playwright | Component tests close to the code, E2E against the real Compose stack (no mocking) |
 | Backend | Java 25, Spring Boot 4, Spring Security, Spring Data JPA | Mainstream, well-documented, matches what most teams actually run |
 | Database | PostgreSQL 16, Flyway | Real constraints and indexes in CI via Testcontainers, not H2 |
 | Auth | Short-lived JWT in HttpOnly cookies + double-submit CSRF | Stateless API, no server-side session store; rationale in [ADR 0002](docs/adr/0002-cookie-jwt-auth.md) |
@@ -179,7 +179,7 @@ Also in [`docs/`](docs/): [user stories and acceptance criteria](docs/user-stori
 ## Layout
 
 ```
-frontend/   Vite + React, Vitest/RTL unit tests, Playwright E2E (e2e/)
+frontend/   Angular CLI app, Vitest/Angular Testing Library unit tests, Playwright E2E (e2e/)
 backend/    Spring Boot 4, Java 25, Flyway, JUnit 5 + Testcontainers
 infra/      Docker Compose
 docs/       ADRs, diagrams, user stories, OpenAPI outline

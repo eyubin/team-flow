@@ -1,6 +1,6 @@
-import { useQuery, type QueryClient } from '@tanstack/react-query'
-import { ApiError } from './api.ts'
-import { queryKeys } from './queryKeys.ts'
+import { injectQuery, type QueryClient } from '@tanstack/angular-query-experimental'
+import { ApiError } from './api'
+import { queryKeys } from './query-keys'
 
 export type Profile = {
   id: string
@@ -18,15 +18,16 @@ export async function fetchProfile(): Promise<Profile | null> {
   return (await response.json()) as Profile
 }
 
-export function useProfile() {
-  return useQuery({
+/** Must be called in an injection context, like any `inject*` function. */
+export function injectProfile() {
+  return injectQuery(() => ({
     queryKey: queryKeys.auth.me(),
     queryFn: fetchProfile,
     // The server rejects a deleted or signed-out account's cookies at once;
     // re-checking on focus is how another device's open tab finds out
     // without waiting for its next API call.
     refetchOnWindowFocus: true,
-  })
+  }))
 }
 
 /** Drops everything cached for the previous user and marks the session as gone. */

@@ -1,38 +1,39 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { Component } from '@angular/core'
+import { screen, waitFor, within } from '@testing-library/angular'
 import { describe, expect, it } from 'vitest'
 import { http, HttpResponse } from 'msw'
-import { Route, Routes } from 'react-router-dom'
-import { server } from '../test/msw/server.ts'
-import { problem, profile } from '../test/msw/handlers.ts'
-import { renderWithProviders } from '../test/render.tsx'
-import { RequireAuth } from '../components/RequireAuth.tsx'
-import { AccountPage } from './AccountPage.tsx'
+import { server } from '../../test/msw/server'
+import { problem, profile } from '../../test/msw/handlers'
+import { RouterOutletHostComponent, renderWithProviders } from '../../test/render'
+import { RequireAuthComponent } from '../components/require-auth.component'
+import { AccountPageComponent } from './account-page.component'
+
+@Component({ selector: 'app-landing-stub', template: '<p>Signed-out landing</p>' })
+class LandingStubComponent {}
 
 const signedIn = http.get('/api/auth/me', () => HttpResponse.json(profile))
 
 // Mounted behind RequireAuth, as in App, so the page gets a loaded profile and
 // a successful deletion has somewhere to land.
 function renderAccount() {
-  return renderWithProviders(
-    <Routes>
-      <Route element={<RequireAuth />}>
-        <Route path="/account" element={<AccountPage />} />
-      </Route>
-      <Route path="/" element={<p>Signed-out landing</p>} />
-    </Routes>,
-    { route: '/account' },
-  )
+  return renderWithProviders(RouterOutletHostComponent, {
+    route: '/account',
+    routes: [
+      { path: '', pathMatch: 'full', component: LandingStubComponent },
+      { path: '', component: RequireAuthComponent, children: [{ path: 'account', component: AccountPageComponent }] },
+    ],
+  })
 }
 
 function section(name: string) {
   return screen.getByRole('region', { name })
 }
 
-describe('AccountPage', () => {
+describe('AccountPageComponent', () => {
   it('shows the current profile', async () => {
     server.use(signedIn)
 
-    renderAccount()
+    await renderAccount()
 
     expect(await screen.findByRole('heading', { name: 'Account settings' })).toBeInTheDocument()
     expect(within(section('Profile')).getByLabelText('Display name')).toHaveValue('Ada Lovelace')
@@ -49,7 +50,7 @@ describe('AccountPage', () => {
       }),
     )
 
-    const { user } = renderAccount()
+    const { user } = await renderAccount()
 
     const displayName = await screen.findByLabelText('Display name')
     await user.clear(displayName)
@@ -72,7 +73,7 @@ describe('AccountPage', () => {
       }),
     )
 
-    const { user } = renderAccount()
+    const { user } = await renderAccount()
 
     const email = await screen.findByLabelText('Email')
     await user.clear(email)
@@ -94,7 +95,7 @@ describe('AccountPage', () => {
   it('shows the API error when the profile update is rejected', async () => {
     server.use(signedIn, http.patch('/api/users/me', () => problem(409, 'Email is already registered')))
 
-    const { user } = renderAccount()
+    const { user } = await renderAccount()
 
     const email = await screen.findByLabelText('Email')
     await user.clear(email)
@@ -115,7 +116,7 @@ describe('AccountPage', () => {
       }),
     )
 
-    const { user } = renderAccount()
+    const { user } = await renderAccount()
 
     const passwords = within(await screen.findByRole('region', { name: 'Password' }))
     await user.type(passwords.getByLabelText('Current password'), 'password123')
@@ -137,7 +138,7 @@ describe('AccountPage', () => {
       }),
     )
 
-    const { user } = renderAccount()
+    const { user } = await renderAccount()
 
     const passwords = within(await screen.findByRole('region', { name: 'Password' }))
     await user.type(passwords.getByLabelText('Current password'), 'password123')
@@ -163,7 +164,7 @@ describe('AccountPage', () => {
       }),
     )
 
-    const { user } = renderAccount()
+    const { user } = await renderAccount()
 
     await user.click(await within(await screen.findByRole('region', { name: 'Delete account' })).findByRole('button', { name: 'Delete account' }))
 
@@ -188,7 +189,7 @@ describe('AccountPage', () => {
       ),
     )
 
-    const { user } = renderAccount()
+    const { user } = await renderAccount()
 
     await user.click(await within(await screen.findByRole('region', { name: 'Delete account' })).findByRole('button', { name: 'Delete account' }))
     const dialog = await screen.findByRole('alertdialog')

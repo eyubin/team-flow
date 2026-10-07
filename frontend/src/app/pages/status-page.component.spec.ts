@@ -1,11 +1,11 @@
-import { screen } from '@testing-library/react'
+import { screen } from '@testing-library/angular'
 import { describe, expect, it } from 'vitest'
-import { renderWithProviders } from '../test/render.tsx'
-import { StatusPage } from './StatusPage.tsx'
+import { renderWithProviders } from '../../test/render'
+import { StatusPageComponent } from './status-page.component'
 
-describe('StatusPage', () => {
+describe('StatusPageComponent', () => {
   it('renders the API health card', async () => {
-    renderWithProviders(<StatusPage />)
+    await renderWithProviders(StatusPageComponent)
 
     expect(screen.getByRole('heading', { name: 'TeamFlow', level: 1 })).toBeInTheDocument()
     expect(await screen.findByText('API is UP')).toBeInTheDocument()

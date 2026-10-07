@@ -1,17 +1,17 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/angular'
 import { describe, expect, it } from 'vitest'
 import { http, HttpResponse } from 'msw'
-import { server } from '../test/msw/server.ts'
-import { problem, project, workspace } from '../test/msw/handlers.ts'
-import { renderWithProviders } from '../test/render.tsx'
-import { DashboardPage } from './DashboardPage.tsx'
+import { server } from '../../test/msw/server'
+import { problem, project, workspace } from '../../test/msw/handlers'
+import { renderWithProviders } from '../../test/render'
+import { DashboardPageComponent } from './dashboard-page.component'
 
 const withWorkspaces = http.get('/api/workspaces', () => HttpResponse.json([workspace]))
 const withProjects = http.get('/api/workspaces/:workspaceId/projects', () => HttpResponse.json([project]))
 
-describe('DashboardPage', () => {
+describe('DashboardPageComponent', () => {
   it('invites the user to create a workspace when they have none', async () => {
-    renderWithProviders(<DashboardPage />)
+    await renderWithProviders(DashboardPageComponent)
 
     expect(await screen.findByText('No workspaces yet.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Create workspace' })).toBeInTheDocument()
@@ -20,7 +20,7 @@ describe('DashboardPage', () => {
   it('lists the projects of the first workspace', async () => {
     server.use(withWorkspaces, withProjects)
 
-    renderWithProviders(<DashboardPage />)
+    await renderWithProviders(DashboardPageComponent)
 
     expect(await screen.findByText('Apollo')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Open task board for Apollo' })).toHaveAttribute(
@@ -38,7 +38,7 @@ describe('DashboardPage', () => {
       }),
     )
 
-    const { user } = renderWithProviders(<DashboardPage />)
+    const { user } = await renderWithProviders(DashboardPageComponent)
 
     await user.type(await screen.findByLabelText('New workspace'), 'Acme')
     await user.click(screen.getByRole('button', { name: 'Create workspace' }))
@@ -48,7 +48,7 @@ describe('DashboardPage', () => {
   })
 
   it('rejects an empty workspace name before calling the API', async () => {
-    const { user } = renderWithProviders(<DashboardPage />)
+    const { user } = await renderWithProviders(DashboardPageComponent)
 
     await user.click(await screen.findByRole('button', { name: 'Create workspace' }))
 
@@ -58,7 +58,7 @@ describe('DashboardPage', () => {
   it('shows a retry banner when workspaces cannot be loaded', async () => {
     server.use(http.get('/api/workspaces', () => problem(500, 'Boom')))
 
-    renderWithProviders(<DashboardPage />)
+    await renderWithProviders(DashboardPageComponent)
 
     expect(await screen.findByRole('alert')).toHaveTextContent("We couldn't load your workspaces.")
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
@@ -67,7 +67,7 @@ describe('DashboardPage', () => {
   it('shows the forbidden page when the dashboard is not accessible', async () => {
     server.use(http.get('/api/workspaces', () => problem(403, 'Nope')))
 
-    renderWithProviders(<DashboardPage />)
+    await renderWithProviders(DashboardPageComponent)
 
     expect(await screen.findByRole('heading', { name: /don't have permission to view this/ })).toBeInTheDocument()
   })

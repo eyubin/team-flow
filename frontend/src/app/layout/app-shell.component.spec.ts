@@ -1,7 +1,14 @@
-import { act, screen } from '@testing-library/react'
+import { Component } from '@angular/core'
+import { screen } from '@testing-library/angular'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { renderWithProviders } from '../../test/render.tsx'
-import { AppShell } from './AppShell.tsx'
+import { renderWithProviders } from '../../test/render'
+import { AppShellComponent } from './app-shell.component'
+
+@Component({
+  imports: [AppShellComponent],
+  template: '<app-shell><p>Page content</p></app-shell>',
+})
+class ShellHostComponent {}
 
 function setScrollY(y: number) {
   Object.defineProperty(window, 'scrollY', { value: y, writable: true, configurable: true })
@@ -13,20 +20,15 @@ beforeEach(() => {
   setScrollY(0)
 })
 
-function scrollTo(y: number) {
+async function scrollTo(fixture: { detectChanges: () => void }, y: number) {
   setScrollY(y)
-  act(() => {
-    window.dispatchEvent(new Event('scroll'))
-  })
+  window.dispatchEvent(new Event('scroll'))
+  fixture.detectChanges()
 }
 
-describe('AppShell', () => {
-  it('renders the brand, primary navigation and its children', () => {
-    renderWithProviders(
-      <AppShell>
-        <p>Page content</p>
-      </AppShell>,
-    )
+describe('AppShellComponent', () => {
+  it('renders the brand, primary navigation and its content', async () => {
+    await renderWithProviders(ShellHostComponent)
 
     expect(screen.getByRole('link', { name: 'TeamFlow' })).toHaveAttribute('href', '/')
     expect(screen.getByRole('navigation', { name: 'Primary' })).toBeInTheDocument()
@@ -35,58 +37,41 @@ describe('AppShell', () => {
     expect(screen.getByText('Page content')).toBeInTheDocument()
   })
 
-  it('marks the current route as active', () => {
-    renderWithProviders(
-      <AppShell>
-        <p>Page content</p>
-      </AppShell>,
-      { route: '/dashboard' },
-    )
+  it('marks the current route as active', async () => {
+    await renderWithProviders(ShellHostComponent, { route: '/dashboard' })
 
-    expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('aria-current', 'page')
+    expect(await screen.findByRole('link', { name: 'Dashboard', current: 'page' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Status' })).not.toHaveAttribute('aria-current')
   })
 
-  it('hides the header once the page is scrolled down past the threshold', () => {
-    const { container } = renderWithProviders(
-      <AppShell>
-        <p>Page content</p>
-      </AppShell>,
-    )
+  it('hides the header once the page is scrolled down past the threshold', async () => {
+    const { container, fixture } = await renderWithProviders(ShellHostComponent)
     const header = container.querySelector('header')!
     expect(header).not.toHaveClass('app-header-hidden')
 
-    scrollTo(300)
+    await scrollTo(fixture, 300)
 
     expect(header).toHaveClass('app-header-hidden')
   })
 
-  it('shows the header again when scrolling back up', () => {
-    const { container } = renderWithProviders(
-      <AppShell>
-        <p>Page content</p>
-      </AppShell>,
-    )
+  it('shows the header again when scrolling back up', async () => {
+    const { container, fixture } = await renderWithProviders(ShellHostComponent)
     const header = container.querySelector('header')!
 
-    scrollTo(300)
+    await scrollTo(fixture, 300)
     expect(header).toHaveClass('app-header-hidden')
 
-    scrollTo(120)
+    await scrollTo(fixture, 120)
     expect(header).not.toHaveClass('app-header-hidden')
   })
 
   // Trackpad jitter must not flap the header, so movements under the
   // threshold are ignored entirely.
-  it('ignores scroll movements below the jitter threshold', () => {
-    const { container } = renderWithProviders(
-      <AppShell>
-        <p>Page content</p>
-      </AppShell>,
-    )
+  it('ignores scroll movements below the jitter threshold', async () => {
+    const { container, fixture } = await renderWithProviders(ShellHostComponent)
     const header = container.querySelector('header')!
 
-    scrollTo(5)
+    await scrollTo(fixture, 5)
 
     expect(header).not.toHaveClass('app-header-hidden')
   })

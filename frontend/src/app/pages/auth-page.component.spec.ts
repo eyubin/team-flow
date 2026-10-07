@@ -1,18 +1,18 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/angular'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { http, HttpResponse } from 'msw'
-import { server } from '../test/msw/server.ts'
-import { profile } from '../test/msw/handlers.ts'
-import { renderWithProviders } from '../test/render.tsx'
-import { AuthPage } from './AuthPage.tsx'
+import { server } from '../../test/msw/server'
+import { profile } from '../../test/msw/handlers'
+import { renderWithProviders } from '../../test/render'
+import { AuthPageComponent } from './auth-page.component'
 
 beforeEach(() => {
   document.cookie = 'XSRF-TOKEN=csrf-value'
 })
 
-describe('AuthPage', () => {
+describe('AuthPageComponent', () => {
   it('shows the login form when no session exists', async () => {
-    renderWithProviders(<AuthPage />)
+    await renderWithProviders(AuthPageComponent)
 
     expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
     expect(screen.getByLabelText('Email')).toBeInTheDocument()
@@ -28,10 +28,10 @@ describe('AuthPage', () => {
       }),
     )
 
-    const { user } = renderWithProviders(<AuthPage />)
+    const { user } = await renderWithProviders(AuthPageComponent)
 
     await user.click(await screen.findByRole('button', { name: 'Need an account?' }))
-    await user.type(screen.getByLabelText('Display name'), 'New User')
+    await user.type(await screen.findByLabelText('Display name'), 'New User')
     await user.type(screen.getByLabelText('Email'), 'new@example.com')
     await user.type(screen.getByLabelText('Password'), 'password123')
     await user.click(screen.getByRole('button', { name: 'Register' }))
@@ -42,10 +42,20 @@ describe('AuthPage', () => {
     expect(registerHeaders?.get('Content-Type')).toBe('application/json')
   })
 
+  it('rejects an invalid email before calling the API', async () => {
+    const { user } = await renderWithProviders(AuthPageComponent)
+
+    await user.type(await screen.findByLabelText('Email'), 'not-an-email')
+    await user.type(screen.getByLabelText('Password'), 'password123')
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Enter a valid email address')
+  })
+
   it('reports an error when the credentials are rejected', async () => {
     server.use(http.post('/api/auth/login', () => HttpResponse.json({ detail: 'Invalid email or password' }, { status: 401 })))
 
-    const { user } = renderWithProviders(<AuthPage />)
+    const { user } = await renderWithProviders(AuthPageComponent)
 
     await user.type(await screen.findByLabelText('Email'), 'ada@example.com')
     await user.type(screen.getByLabelText('Password'), 'wrong-password')

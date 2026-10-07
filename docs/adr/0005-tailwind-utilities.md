@@ -1,6 +1,6 @@
 # ADR 0005: Tailwind for layout utilities alongside MUI
 
-- Status: Accepted
+- Status: Accepted, amended by [ADR 0006](0006-angular-frontend.md): Tailwind now sits under Angular Material, its colours read `--mat-sys-*`, and it is wired in through `@tailwindcss/postcss`
 - Date: 2026-09-23
 - Amends: [ADR 0004](0004-mui-design-system.md)
 
