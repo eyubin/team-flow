@@ -1,0 +1,189 @@
+@use '@angular/material' as mat;
+
+// Layer order: Tailwind's theme and base sit at the bottom, then the app's own
+// shared classes, then Tailwind's utilities. Angular Material's component
+// styles are unlayered, so where a utility and a Material style set the same
+// property on a Material element, use Tailwind's `!` modifier. See ADRs 0005
+// and 0006.
+@layer theme, base, components, utilities;
+
+// Radix Themes' own stack, which the product has always used. Keeping it
+// avoids Roboto (Material's default) and so avoids a webfont request.
+$font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', system-ui, sans-serif,
+  'Apple Color Emoji', 'Segoe UI Emoji';
+
+html {
+  // ThemeService overwrites this inline with the resolved appearance; until it
+  // runs, the operating system decides.
+  color-scheme: light dark;
+
+  @include mat.theme(
+    (
+      color: (
+        primary: mat.$violet-palette,
+        theme-type: color-scheme,
+      ),
+      typography: (
+        plain-family: $font-family,
+        brand-family: $font-family,
+      ),
+      density: -1,
+    )
+  );
+
+  // The generated M3 palette is only a base. These are the exact Radix
+  // Themes values the app was built on (accent `iris`, gray `slate`), so the
+  // Angular rebuild keeps the look the product already had.
+  @include mat.theme-overrides(
+    (
+      primary: #5b5bd6,
+      on-primary: #ffffff,
+      primary-container: light-dark(#f0f1fe, #202248),
+      on-primary-container: light-dark(#5753c6, #b1a9ff),
+      background: light-dark(#fcfcfd, #111113),
+      on-background: light-dark(#1c2024, #edeef0),
+      surface: light-dark(#fcfcfd, #111113),
+      surface-container-lowest: light-dark(#ffffff, #111113),
+      surface-container-low: light-dark(#f9f9fb, #18191b),
+      surface-container: light-dark(#f9f9fb, #18191b),
+      surface-container-high: light-dark(#f0f0f3, #212225),
+      surface-container-highest: light-dark(#e8e8ec, #272a2d),
+      on-surface: light-dark(#1c2024, #edeef0),
+      on-surface-variant: light-dark(#60646c, #b0b4ba),
+      outline: light-dark(#8b8d98, #696e77),
+      outline-variant: light-dark(#0000001f, #ffffff22),
+      error: light-dark(#d32f2f, #f44336),
+      // Radix `radius="large"`, which the app set explicitly.
+      corner-extra-small: 4px,
+      corner-small: 8px,
+      corner-medium: 8px,
+      corner-large: 12px,
+      corner-full: 8px,
+    )
+  );
+
+  // Status colours Material has no system tokens for.
+  --app-success: light-dark(#2e7d32, #66bb6a);
+  --app-warning: light-dark(#ed6c02, #ffa726);
+  --app-info: light-dark(#0288d1, #29b6f6);
+  --app-accent-text: light-dark(#5753c6, #b1a9ff);
+}
+
+// Buttons keep the flat, sentence-case treatment the app always had.
+@include mat.button-overrides(
+  (
+    filled-label-text-weight: 500,
+    outlined-label-text-weight: 500,
+    text-label-text-weight: 500,
+  )
+);
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    background: var(--mat-sys-surface);
+    color: var(--mat-sys-on-surface);
+    font-family: $font-family;
+    font-size: 1rem;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1,
+  h2,
+  h3,
+  p {
+    margin: 0;
+  }
+
+  a {
+    color: var(--app-accent-text);
+    text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+    text-underline-offset: 0.15em;
+  }
+
+  a:hover {
+    text-decoration-color: currentColor;
+  }
+}
+
+// Shared type treatments, named after what they are on the page rather than
+// a size, so templates read as structure.
+@layer components {
+  .eyebrow {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    line-height: 2.66;
+    text-transform: uppercase;
+    color: var(--mat-sys-primary);
+  }
+
+  .page-title {
+    font-size: 3rem;
+    font-weight: 700;
+    line-height: 1.17;
+  }
+
+  .page-title-sm {
+    font-size: 2.125rem;
+    font-weight: 700;
+    line-height: 1.235;
+  }
+
+  .section-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.334;
+  }
+
+  .subsection-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    line-height: 1.6;
+  }
+
+  .muted {
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  // A plain-looking button that reads as a link, for actions inside text.
+  .link-button {
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    text-align: left;
+    color: var(--app-accent-text);
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+    text-underline-offset: 0.15em;
+  }
+
+  .link-button:hover {
+    text-decoration-color: currentColor;
+  }
+
+  // Destructive actions, in any button appearance.
+  .mat-mdc-button-base.danger {
+    --mat-button-filled-container-color: var(--mat-sys-error);
+    --mat-button-filled-label-text-color: var(--mat-sys-on-error);
+    --mat-button-outlined-label-text-color: var(--mat-sys-error);
+    --mat-button-outlined-outline-color: color-mix(in srgb, var(--mat-sys-error) 50%, transparent);
+    --mat-button-text-label-text-color: var(--mat-sys-error);
+  }
+
+  // Outlined Material cards, which is the only variant the app uses.
+  .mat-mdc-card.app-card {
+    --mat-card-outlined-container-color: var(--mat-sys-surface-container-low);
+  }
+}
