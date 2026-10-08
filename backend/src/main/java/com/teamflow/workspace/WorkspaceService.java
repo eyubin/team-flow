@@ -168,7 +168,7 @@ public class WorkspaceService {
                 .toList();
         if (!blocking.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Make someone else an administrator of " + String.join(", ", blocking) + " before deleting your account");
+                    "Make someone else an administrator of " + String.join(", ", blocking) + " before deleting this account");
         }
         for (WorkspaceMember member : memberships) {
             UUID workspaceId = member.getId().getWorkspaceId();

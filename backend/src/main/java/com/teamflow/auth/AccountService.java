@@ -72,11 +72,23 @@ public class AccountService {
     public void delete(UUID userId, AccountRequests.DeleteAccount request) {
         User user = requireActive(userId);
         verifyPassword(user, request.password());
-        events.publishEvent(new UserDeletedEvent(userId));
+        anonymize(user, userId);
+    }
+
+    /**
+     * Shared with {@link UserAdminService}. Must run inside the caller's
+     * transaction so a {@link UserDeletedEvent} listener can veto it.
+     */
+    void anonymize(User user, UUID actorId) {
+        if (user.getSystemRole() == SystemRole.ADMIN && users.countByEnabledTrueAndSystemRole(SystemRole.ADMIN) <= 1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Make someone else a system administrator before deleting this account");
+        }
+        events.publishEvent(new UserDeletedEvent(user.getId()));
         // A hash of a random secret nobody holds: well-formed for the encoder,
         // but no password will ever match it.
         user.anonymize(passwordEncoder.encode(UUID.randomUUID().toString()));
-        audit.record(userId, "USER_DELETED", "USER", userId, Map.of());
+        audit.record(actorId, "USER_DELETED", "USER", user.getId(), Map.of());
     }
 
     private User requireActive(UUID userId) {

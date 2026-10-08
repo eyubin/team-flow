@@ -2,6 +2,8 @@ package com.teamflow.auth;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
@@ -23,6 +25,10 @@ public class User {
     @Column(name = "display_name", nullable = false, length = 80)
     private String displayName;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "system_role", nullable = false, length = 20)
+    private SystemRole systemRole;
+
     @Column(nullable = false)
     private boolean enabled;
 
@@ -35,10 +41,15 @@ public class User {
     protected User() {}
 
     public User(UUID id, String email, String passwordHash, String displayName, Instant now) {
+        this(id, email, passwordHash, displayName, SystemRole.USER, now);
+    }
+
+    public User(UUID id, String email, String passwordHash, String displayName, SystemRole systemRole, Instant now) {
         this.id = id;
         this.email = email;
         this.passwordHash = passwordHash;
         this.displayName = displayName;
+        this.systemRole = systemRole;
         this.enabled = true;
         this.createdAt = now;
         this.updatedAt = now;
@@ -48,6 +59,7 @@ public class User {
     public String getEmail() { return email; }
     public String getPasswordHash() { return passwordHash; }
     public String getDisplayName() { return displayName; }
+    public SystemRole getSystemRole() { return systemRole; }
     public boolean isEnabled() { return enabled; }
     public Instant getCreatedAt() { return createdAt; }
 
@@ -66,6 +78,11 @@ public class User {
         this.updatedAt = Instant.now();
     }
 
+    public void changeSystemRole(SystemRole systemRole) {
+        this.systemRole = systemRole;
+        this.updatedAt = Instant.now();
+    }
+
     /**
      * Soft delete. The row stays because audit events, comments and workspaces
      * reference it, but everything that identifies the person is replaced and
@@ -76,6 +93,7 @@ public class User {
         this.email = "deleted-" + id + "@deleted.invalid";
         this.displayName = "Deleted user";
         this.passwordHash = unusablePasswordHash;
+        this.systemRole = SystemRole.USER;
         this.enabled = false;
         this.updatedAt = Instant.now();
     }

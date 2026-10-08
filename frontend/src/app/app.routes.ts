@@ -25,6 +25,10 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/account-page.component').then((m) => m.AccountPageComponent),
       },
       {
+        path: 'admin/users',
+        loadComponent: () => import('./pages/users-admin-page.component').then((m) => m.UsersAdminPageComponent),
+      },
+      {
         path: 'workspaces/:workspaceId/members',
         loadComponent: () => import('./pages/members-page.component').then((m) => m.MembersPageComponent),
       },

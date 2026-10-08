@@ -1,5 +1,6 @@
 package com.teamflow.demo;
 
+import com.teamflow.auth.SystemRole;
 import com.teamflow.auth.User;
 import com.teamflow.auth.UserRepository;
 import com.teamflow.task.Task;
@@ -47,7 +48,7 @@ public class DemoDataSeeder {
         if (users.findById(ADMIN_ID).isPresent()) return;
         Instant now = Instant.now();
         String passwordHash = passwordEncoder.encode(DEMO_PASSWORD);
-        users.save(new User(ADMIN_ID, "demo-admin@teamflow.local", passwordHash, "Demo Admin", now));
+        users.save(new User(ADMIN_ID, "demo-admin@teamflow.local", passwordHash, "Demo Admin", SystemRole.ADMIN, now));
         users.save(new User(MEMBER_ID, "demo-member@teamflow.local", passwordHash, "Demo Member", now));
         users.save(new User(VIEWER_ID, "demo-viewer@teamflow.local", passwordHash, "Demo Viewer", now));
         workspaces.save(new Workspace(WORKSPACE_ID, "Demo Workspace", ADMIN_ID, now));

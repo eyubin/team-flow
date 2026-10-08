@@ -38,6 +38,10 @@ export const queryKeys = {
     byTask: (taskId: string) => ['comments', taskId] as const,
   },
 
+  admin: {
+    users: () => ['admin', 'users'] as const,
+  },
+
   auditEvents: {
     byTask: (taskId: string) => ['audit-events', taskId] as const,
   },

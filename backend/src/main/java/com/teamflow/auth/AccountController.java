@@ -15,8 +15,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * The signed-in user's own account. Creation is {@code POST /api/auth/register};
- * there is deliberately no endpoint to act on another user's account, since
- * roles are workspace-scoped and no one administers accounts globally.
+ * acting on another user's account is {@link UserAdminController}, which only
+ * a {@link SystemRole#ADMIN} can reach.
  */
 @RestController
 @RequestMapping("/api/users/me")

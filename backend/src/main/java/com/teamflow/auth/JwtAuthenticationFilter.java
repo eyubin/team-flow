@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.UUID;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
@@ -31,9 +32,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (token != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             try {
                 UUID userId = jwtService.parseAccessSubject(token);
+                // The role is read from the database on every request rather than
+                // carried in the token, so a promotion or demotion applies at once.
                 users.findById(userId).filter(User::isEnabled).ifPresent(user -> {
                     var authentication = UsernamePasswordAuthenticationToken.authenticated(
-                            user.getId().toString(), null, java.util.List.of());
+                            user.getId().toString(), null,
+                            java.util.List.of(new SimpleGrantedAuthority("ROLE_" + user.getSystemRole().name())));
                     authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(authentication);
                 });

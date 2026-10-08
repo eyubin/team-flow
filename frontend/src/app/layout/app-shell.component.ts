@@ -1,11 +1,15 @@
-import { ChangeDetectionStrategy, Component, ViewEncapsulation, signal } from '@angular/core'
+import { ChangeDetectionStrategy, Component, ViewEncapsulation, computed, signal } from '@angular/core'
 import { RouterLink, RouterLinkActive } from '@angular/router'
+import { injectProfile } from '../lib/auth'
 import { ThemeToggleComponent } from '../theme/theme-toggle.component'
 
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/status', label: 'Status' },
 ]
+
+// Only a convenience: the API is what refuses non-admins.
+const ADMIN_NAV_ITEMS = [{ to: '/admin/users', label: 'Users' }]
 
 // Past this many pixels of movement a scroll counts; below it, trackpad
 // jitter would flap the header.
@@ -32,7 +36,7 @@ const HEADER_HEIGHT = 64
         <div class="app-header-bar">
           <a class="app-brand" routerLink="/">TeamFlow</a>
           <nav aria-label="Primary" class="flex items-center gap-4">
-            @for (item of navItems; track item.to) {
+            @for (item of navItems(); track item.to) {
               <a class="app-nav-item" [routerLink]="item.to" routerLinkActive="active" ariaCurrentWhenActive="page">{{
                 item.label
               }}</a>
@@ -149,7 +153,10 @@ const HEADER_HEIGHT = 64
   `,
 })
 export class AppShellComponent {
-  protected readonly navItems = NAV_ITEMS
+  private readonly profile = injectProfile()
+  protected readonly navItems = computed(() =>
+    this.profile.data()?.systemRole === 'ADMIN' ? [...NAV_ITEMS, ...ADMIN_NAV_ITEMS] : NAV_ITEMS,
+  )
   protected readonly hidden = signal(false)
   private lastY = window.scrollY
 
