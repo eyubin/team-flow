@@ -18,6 +18,8 @@ security:
 tags:
   - name: auth
   - name: account
+  - name: admin
+    description: User management; requires the ADMIN system role (403 otherwise)
   - name: workspaces
   - name: members
   - name: projects
@@ -190,6 +192,112 @@ paths:
         "400":
           $ref: "#/components/responses/Problem"
         "403":
+          $ref: "#/components/responses/Problem"
+
+  /api/admin/users:
+    get:
+      tags: [admin]
+      summary: List all active (non-deleted) users
+      operationId: listUsers
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminUserResponse"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+    post:
+      tags: [admin]
+      summary: Create a user (systemRole defaults to USER)
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserResponse"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+
+  /api/admin/users/{userId}:
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [admin]
+      summary: Get a user
+      operationId: getUser
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserResponse"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+    patch:
+      tags: [admin]
+      summary: Update name, email, system role and/or reset the password
+      description: |
+        Partial update; omitted fields are unchanged. No current password is required.
+        Demoting the last system ADMIN is refused with 409.
+      operationId: updateUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRequest"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserResponse"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+    delete:
+      tags: [admin]
+      summary: Delete a user (soft delete + anonymize)
+      description: |
+        Same clean-up as self-service account deletion. Refused with 409 for the caller's own account
+        (use DELETE /api/users/me) and while the user is the last ADMIN of a workspace that has other members.
+      operationId: deleteUser
+      responses:
+        "204":
+          description: Deleted
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
           $ref: "#/components/responses/Problem"
 
   /api/workspaces:
@@ -722,9 +830,13 @@ components:
         password:
           type: string
 
+    SystemRole:
+      type: string
+      description: Platform-wide role, independent of workspace roles
+      enum: [ADMIN, USER]
     UserProfile:
       type: object
-      required: [id, email, displayName]
+      required: [id, email, displayName, systemRole]
       properties:
         id:
           type: string
@@ -733,6 +845,59 @@ components:
           type: string
         displayName:
           type: string
+        systemRole:
+          $ref: "#/components/schemas/SystemRole"
+    AdminUserResponse:
+      type: object
+      required: [id, email, displayName, systemRole, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        displayName:
+          type: string
+        systemRole:
+          $ref: "#/components/schemas/SystemRole"
+        createdAt:
+          type: string
+          format: date-time
+    CreateUserRequest:
+      type: object
+      required: [email, password, displayName]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 320
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+        displayName:
+          type: string
+          maxLength: 80
+        systemRole:
+          $ref: "#/components/schemas/SystemRole"
+    UpdateUserRequest:
+      type: object
+      description: Partial update; omitted fields are unchanged.
+      properties:
+        displayName:
+          type: string
+          maxLength: 80
+        email:
+          type: string
+          format: email
+          maxLength: 320
+        systemRole:
+          $ref: "#/components/schemas/SystemRole"
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+          description: New password; sets it without needing the current one
 
     UpdateAccountRequest:
       type: object

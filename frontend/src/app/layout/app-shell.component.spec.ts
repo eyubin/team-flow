@@ -1,6 +1,9 @@
 import { Component } from '@angular/core'
 import { screen } from '@testing-library/angular'
+import { http, HttpResponse } from 'msw'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { adminProfile, profile } from '../../test/msw/handlers'
+import { server } from '../../test/msw/server'
 import { renderWithProviders } from '../../test/render'
 import { AppShellComponent } from './app-shell.component'
 
@@ -35,6 +38,23 @@ describe('AppShellComponent', () => {
     expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', '/dashboard')
     expect(screen.getByRole('link', { name: 'Status' })).toHaveAttribute('href', '/status')
     expect(screen.getByText('Page content')).toBeInTheDocument()
+  })
+
+  it('links to user management only for system admins', async () => {
+    server.use(http.get('/api/auth/me', () => HttpResponse.json(adminProfile)))
+
+    await renderWithProviders(ShellHostComponent)
+
+    expect(await screen.findByRole('link', { name: 'Users' })).toHaveAttribute('href', '/admin/users')
+  })
+
+  it('hides user management from regular users', async () => {
+    server.use(http.get('/api/auth/me', () => HttpResponse.json(profile)))
+
+    await renderWithProviders(ShellHostComponent)
+
+    expect(await screen.findByRole('link', { name: 'Dashboard' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Users' })).not.toBeInTheDocument()
   })
 
   it('marks the current route as active', async () => {

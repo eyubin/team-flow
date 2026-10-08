@@ -2,10 +2,14 @@ import { injectQuery, type QueryClient } from '@tanstack/angular-query-experimen
 import { ApiError } from './api'
 import { queryKeys } from './query-keys'
 
+/** Platform-wide, unlike a workspace role. Only `ADMIN` may manage other users. */
+export type SystemRole = 'ADMIN' | 'USER'
+
 export type Profile = {
   id: string
   email: string
   displayName: string
+  systemRole: SystemRole
 }
 
 // Only a 401 means "signed out". Anything else is thrown so RequireAuth can

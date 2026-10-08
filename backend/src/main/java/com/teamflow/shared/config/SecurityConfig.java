@@ -89,6 +89,8 @@ public class SecurityConfig {
                                         .permitAll()
                                         .requestMatchers(PUBLIC_AUTH)
                                         .permitAll()
+                                        .requestMatchers("/api/admin/**")
+                                        .hasRole("ADMIN")
                                         .anyRequest()
                                         .authenticated())
                 .httpBasic(AbstractHttpConfigurer::disable)

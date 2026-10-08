@@ -1,6 +1,7 @@
 import { http, HttpResponse } from 'msw'
 
-export type Profile = { id: string; email: string; displayName: string }
+export type Profile = { id: string; email: string; displayName: string; systemRole: 'ADMIN' | 'USER' }
+export type AdminUser = Profile & { createdAt: string }
 export type Workspace = { id: string; name: string; myRole: string }
 export type Project = { id: string; workspaceId: string; name: string; description?: string }
 export type Member = { userId: string; email: string; displayName: string; role: 'ADMIN' | 'MEMBER' | 'VIEWER' }
@@ -14,7 +15,17 @@ export type Task = {
   version: number
 }
 
-export const profile: Profile = { id: 'user-1', email: 'ada@example.com', displayName: 'Ada Lovelace' }
+export const profile: Profile = { id: 'user-1', email: 'ada@example.com', displayName: 'Ada Lovelace', systemRole: 'USER' }
+
+export const adminProfile: Profile = { ...profile, systemRole: 'ADMIN' }
+
+export const adminUser: AdminUser = {
+  id: 'user-2',
+  email: 'grace@example.com',
+  displayName: 'Grace Hopper',
+  systemRole: 'USER',
+  createdAt: '2026-01-01T00:00:00Z',
+}
 
 export const workspace: Workspace = { id: 'workspace-1', name: 'Acme', myRole: 'ADMIN' }
 
@@ -44,6 +55,11 @@ export const handlers = [
   http.patch('/api/users/me', () => HttpResponse.json(profile)),
   http.put('/api/users/me/password', () => new HttpResponse(null, { status: 204 })),
   http.delete('/api/users/me', () => new HttpResponse(null, { status: 204 })),
+
+  http.get('/api/admin/users', () => HttpResponse.json([])),
+  http.post('/api/admin/users', () => HttpResponse.json(adminUser, { status: 201 })),
+  http.patch('/api/admin/users/:userId', () => HttpResponse.json(adminUser)),
+  http.delete('/api/admin/users/:userId', () => new HttpResponse(null, { status: 204 })),
 
   http.get('/api/workspaces', () => HttpResponse.json([])),
   http.post('/api/workspaces', () => HttpResponse.json(workspace, { status: 201 })),
